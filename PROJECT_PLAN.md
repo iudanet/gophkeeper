@@ -6,11 +6,12 @@
 
 ### Ключевые технологии:
 - **Go 1.22+** - для использования новых возможностей net/http.ServeMux
-- **SQLite** + **goose** - база данных сервера с миграциями (embed.FS)
+- **SQLite** (modernc.org/sqlite) + **goose** - pure Go SQLite без CGO, миграции embed.FS
 - **BoltDB** - key-value хранилище на клиенте
 - **Argon2id** - key derivation
 - **AES-256-GCM** - шифрование
 - **JWT** - аутентификация
+- **TLS** - Let's Encrypt для production, опция --insecure для dev
 - **net/http.ServeMux** - HTTP роутер (Go 1.22+)
 - **log/slog** - структурированное логирование
 - **Cobra** - CLI framework
@@ -32,14 +33,21 @@
 - [ ] Инициализация Go модуля (`go mod init github.com/username/gophkeeper`)
 - [ ] Установка зависимостей:
   ```bash
-  go get github.com/spf13/cobra
-  go get github.com/pressly/goose/v3
-  go get github.com/stretchr/testify
-  go get go.uber.org/mock/mockgen
-  go get go.etcd.io/bbolt
-  go get github.com/mattn/go-sqlite3
-  go get golang.org/x/crypto/argon2
-  go get github.com/golang-jwt/jwt/v5
+  # CLI и базовые утилиты
+  go get github.com/spf13/cobra@latest
+
+  # База данных (pure Go, без CGO!)
+  go get modernc.org/sqlite@latest           # SQLite без CGO
+  go get github.com/pressly/goose/v3@latest   # миграции
+  go get go.etcd.io/bbolt@latest              # BoltDB для клиента
+
+  # Криптография
+  go get golang.org/x/crypto/argon2@latest
+  go get github.com/golang-jwt/jwt/v5@latest
+
+  # Тестирование
+  go get github.com/stretchr/testify@latest
+  go install go.uber.org/mock/mockgen@latest  # для генерации моков
   ```
 - [ ] Создание структуры директорий (слоистая архитектура):
   ```
@@ -121,9 +129,22 @@
 - [ ] Тесты для хеширования
 
 ### 3.4 TLS конфигурация
-- [ ] Генерация самоподписанных сертификатов для разработки (скрипт/Makefile)
-- [ ] Настройка TLS 1.3 для сервера (MinVersion, CipherSuites)
-- [ ] Настройка TLS для клиента (проверка сертификатов)
+- [ ] **Сервер - поддержка валидных сертификатов:**
+  - [ ] Конфигурация для указания cert_file и key_file
+  - [ ] TLS 1.3 минимальная версия
+  - [ ] Документация по использованию Let's Encrypt
+  - [ ] Пример с certbot в README
+- [ ] **Клиент - работа с валидными сертификатами:**
+  - [ ] По умолчанию: доверие системным CA (без настройки)
+  - [ ] Опция `--ca-cert` для кастомного CA
+  - [ ] Опция `--insecure` для dev (с WARNING в логах)
+  - [ ] Реализация `NewHTTPClient(cfg Config)` с TLS config
+- [ ] **Development режим:**
+  - [ ] Makefile target для генерации самоподписанного сертификата
+  - [ ] Предупреждение при использовании `--insecure`
+- [ ] **Тесты:**
+  - [ ] Test TLS connection с валидным сертификатом (mock)
+  - [ ] Test insecure mode работает
 
 ## Фаза 4: Хранилище данных
 
@@ -329,9 +350,9 @@
 ## Фаза 8: Серверная реализация
 
 ### 8.1 HTTP сервер (`cmd/server/main.go`, `internal/server/`)
-- [ ] Настройка HTTP сервера (chi router или аналог)
-- [ ] Настройка TLS (cert, key из конфигурации)
-- [ ] Роутинг:
+- [ ] Настройка HTTP сервера с **net/http.ServeMux** (Go 1.22+)
+- [ ] Настройка TLS (cert, key из конфигурации, поддержка Let's Encrypt)
+- [ ] Роутинг с методами:
   ```
   POST   /api/v1/auth/register
   GET    /api/v1/auth/salt/:username
@@ -419,22 +440,48 @@
 - [ ] Команда `sync`:
   - Флаги: `--force` (полная синхронизация)
   - Вызов sync.Sync()
-- [ ] Флаг `--version`:
-  - Вывод buildVersion и buildDate
+- [ ] Команда `config`:
+  - Подкоманда `set-server <url>` - установка URL сервера
+  - Флаги: `--ca-cert` (путь к CA сертификату для self-hosted)
+  - Подкоманда `show` - показать текущую конфигурацию
+  - Сохранение в `~/.gophkeeper/config.yaml`
+- [ ] **Глобальные флаги:**
+  - `--insecure` - отключить проверку TLS (только для dev, с WARNING)
+  - `--ca-cert <path>` - указать кастомный CA сертификат
+  - `--server <url>` - переопределить URL сервера
+  - `--version` - вывод buildVersion и buildDate
 
 ### 9.2 HTTP клиент (`internal/client/api/`)
-- [ ] Структура `Client` с базовым URL и HTTP client
-- [ ] Метод `Register(username, authKeyHash, publicSalt)` → user_id
-- [ ] Метод `GetSalt(username)` → public_salt
-- [ ] Метод `Login(username, authKeyHash)` → tokens
-- [ ] Метод `RefreshToken(refreshToken)` → new tokens
-- [ ] Метод `Logout(accessToken)`
-- [ ] Метод `GetSync(accessToken, since)` → entries
-- [ ] Метод `PostSync(accessToken, entries)` → conflicts
-- [ ] Автоматическое добавление Authorization header
-- [ ] Автоматический refresh при 401 ошибке
-- [ ] Обработка сетевых ошибок
-- [ ] Тесты с mock сервером
+- [ ] **Конфигурация клиента:**
+  - [ ] Структура `Config`:
+    ```go
+    type Config struct {
+        ServerURL          string
+        CAcert            string  // опционально для self-hosted
+        InsecureSkipVerify bool   // опционально для dev
+    }
+    ```
+  - [ ] `NewHTTPClient(cfg Config)` - создание с TLS конфигурацией:
+    - По умолчанию: доверие системным CA
+    - Если указан CAcert: загрузка и использование кастомного CA
+    - Если InsecureSkipVerify: отключение проверки (с WARNING в slog)
+- [ ] **API методы:**
+  - [ ] `Register(username, authKeyHash, publicSalt)` → user_id
+  - [ ] `GetSalt(username)` → public_salt
+  - [ ] `Login(username, authKeyHash)` → tokens
+  - [ ] `RefreshToken(refreshToken)` → new tokens
+  - [ ] `Logout(accessToken)`
+  - [ ] `GetSync(accessToken, since)` → entries
+  - [ ] `PostSync(accessToken, entries)` → conflicts
+- [ ] **Дополнительная логика:**
+  - [ ] Автоматическое добавление Authorization header
+  - [ ] Автоматический refresh при 401 ошибке
+  - [ ] Обработка сетевых ошибок
+  - [ ] User-friendly ошибки для TLS проблем
+- [ ] **Тесты:**
+  - [ ] Тесты с mock HTTP сервером
+  - [ ] Тест TLS конфигурации (mock)
+  - [ ] Тест refresh token flow
 
 ### 9.3 Синхронизация (`internal/client/sync/`)
 - [ ] Функция `Sync()`:

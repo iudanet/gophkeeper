@@ -185,6 +185,14 @@ meta/           - Метаинформация
 
 **Путь к файлу:** конфигурируется, по умолчанию `./data/gophkeeper.db`
 
+**SQLite драйвер:**
+- Использование **modernc.org/sqlite** - pure Go реализация, без CGO
+- Преимущества:
+  - Кросс-компиляция без проблем (не требует CGO)
+  - Легче сборка для Windows/Linux/macOS
+  - Меньше зависимостей при сборке
+- Подключение: `sql.Open("sqlite", "file:path/to/db.db")`
+
 **Миграции:**
 - Использование **goose** для управления миграциями
 - Файлы миграций встроены в бинарник через `embed.FS`
@@ -194,18 +202,26 @@ meta/           - Метаинформация
 
 **Пример структуры:**
 ```go
+import (
+    _ "modernc.org/sqlite" // pure Go SQLite driver
+)
+
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
 func RunMigrations(db *sql.DB) error {
     goose.SetBaseFS(embedMigrations)
-    if err := goose.SetDialect("sqlite3"); err != nil {
+    if err := goose.SetDialect("sqlite"); err != nil {
         return err
     }
     if err := goose.Up(db, "migrations"); err != nil {
         return err
     }
     return nil
+}
+
+func OpenDB(path string) (*sql.DB, error) {
+    return sql.Open("sqlite", path)
 }
 ```
 
@@ -944,9 +960,174 @@ func LoggingMiddleware(logger *slog.Logger) Middleware {
 ## 13. Безопасность
 
 ### 13.1. TLS/HTTPS
-- Все коммуникации клиент-сервер только через TLS 1.3
+
+**Требования:**
+- Все коммуникации клиент-сервер только через TLS
 - Минимальная версия TLS: 1.3
 - Рекомендуемые cipher suites: TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256
+
+**Стратегия работы с сертификатами:**
+
+**Production (рекомендуемый подход):**
+- Использование валидных сертификатов от доверенных CA (Let's Encrypt)
+- Клиент доверяет системным корневым сертификатам (по умолчанию)
+- Автоматическое обновление сертификатов (certbot, acme.sh)
+- Не требует дополнительной настройки клиента
+
+**Пример для сервера с Let's Encrypt:**
+```bash
+# Получение сертификата (certbot)
+certbot certonly --standalone -d gophkeeper.example.com
+
+# Автообновление
+certbot renew --deploy-hook "systemctl reload gophkeeper-server"
+```
+
+**Конфигурация сервера (с валидными сертификатами):**
+```yaml
+# config.yaml
+server:
+  host: 0.0.0.0
+  port: 443
+  tls:
+    enabled: true
+    cert_file: /etc/letsencrypt/live/gophkeeper.example.com/fullchain.pem
+    key_file: /etc/letsencrypt/live/gophkeeper.example.com/privkey.pem
+    min_version: "1.3"
+```
+
+**Конфигурация клиента (с валидными сертификатами):**
+```yaml
+# ~/.gophkeeper/config.yaml
+server:
+  url: https://gophkeeper.example.com
+  # Не требуется дополнительная настройка - доверяем системным CA
+```
+
+**Development / Self-hosted (опциональные режимы):**
+
+1. **Самоподписанные сертификаты (для разработки):**
+```bash
+# Генерация самоподписанного сертификата
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes \
+  -subj "/CN=localhost"
+```
+
+2. **Опция для клиента - указание кастомного CA:**
+```bash
+# Клиент с кастомным CA сертификатом
+gophkeeper --ca-cert /path/to/ca.pem login
+
+# Или в конфиге
+server:
+  url: https://gophkeeper.local
+  ca_cert: /path/to/ca.pem
+```
+
+3. **Опция для клиента - insecure режим (только для dev):**
+```bash
+# WARNING: Не для production!
+gophkeeper --insecure login
+
+# Или в конфиге
+server:
+  url: https://gophkeeper.local
+  insecure_skip_verify: true  # WARNING: небезопасно!
+```
+
+**Реализация в клиенте:**
+```go
+// internal/client/api/client.go
+type Config struct {
+    ServerURL          string
+    CAcert            string  // путь к CA сертификату (опционально)
+    InsecureSkipVerify bool   // только для dev (опционально)
+}
+
+func NewHTTPClient(cfg Config) (*http.Client, error) {
+    tlsConfig := &tls.Config{
+        MinVersion: tls.VersionTLS13,
+    }
+
+    // Если указан кастомный CA
+    if cfg.CAcert != "" {
+        caCert, err := os.ReadFile(cfg.CAcert)
+        if err != nil {
+            return nil, err
+        }
+        caCertPool := x509.NewCertPool()
+        caCertPool.AppendCertsFromPEM(caCert)
+        tlsConfig.RootCAs = caCertPool
+    }
+
+    // WARNING: только для development!
+    if cfg.InsecureSkipVerify {
+        logger.Warn("TLS verification disabled - insecure mode")
+        tlsConfig.InsecureSkipVerify = true
+    }
+
+    transport := &http.Transport{
+        TLSClientConfig: tlsConfig,
+    }
+
+    return &http.Client{Transport: transport}, nil
+}
+```
+
+**Рекомендации:**
+
+1. **Production:**
+   - ✅ Использовать Let's Encrypt (бесплатно, автообновление)
+   - ✅ Клиент работает "из коробки" без дополнительных настроек
+   - ✅ Сервер доступен по доменному имени (не IP)
+
+2. **Self-hosted:**
+   - ✅ Использовать валидный домен + Let's Encrypt даже для внутреннего использования
+   - ⚠️ Альтернатива: создать свой CA и распространить сертификат (сложнее)
+   - ⚠️ Опция `--ca-cert` для указания кастомного CA
+
+3. **Development:**
+   - ⚠️ Самоподписанные сертификаты + `--insecure` флаг
+   - ⚠️ Показывать предупреждение при использовании `--insecure`
+
+**UX для пользователя:**
+
+**Простой случай (рекомендуемый):**
+```bash
+# Установка клиента
+curl -sSL https://get.gophkeeper.io/install.sh | bash
+
+# Первая настройка - только URL сервера
+gophkeeper config set-server https://gophkeeper.example.com
+
+# Регистрация и использование - работает сразу
+gophkeeper register
+gophkeeper login
+gophkeeper add credential ...
+```
+
+**Self-hosted с кастомным CA:**
+```bash
+# Администратор раздает файл ca.pem
+gophkeeper config set-server https://gophkeeper.company.local --ca-cert ca.pem
+
+# Далее все работает как обычно
+gophkeeper register
+```
+
+**Development:**
+```bash
+# При первом подключении к dev серверу без валидного сертификата
+gophkeeper login
+# Error: x509: certificate signed by unknown authority
+#
+# Use --insecure to skip TLS verification (development only):
+#   gophkeeper --insecure login
+
+gophkeeper --insecure login
+# WARNING: TLS verification disabled. Do not use in production!
+# Username: ...
+```
 
 ### 13.2. Rate Limiting
 ```
