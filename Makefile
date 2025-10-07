@@ -1,4 +1,4 @@
-.PHONY: all build build-server build-client test test-unit test-integration lint clean run-server run-client help
+.PHONY: all build build-server build-client test test-unit test-integration fmt lint clean run-server run-client help
 
 # Version information
 VERSION ?= dev
@@ -51,6 +51,14 @@ coverage-html: test-unit ## Generate HTML coverage report
 	@echo "Generating HTML coverage report..."
 	@$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
+
+fmt: ## Format code with gofmt, goimports, and fieldalignment
+	@echo "Running gofmt..."
+	@gofmt -w .
+	@echo "Running goimports..."
+	@goimports -w .
+	@echo "Running fieldalignment..."
+	@$(GOCMD) run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment -fix ./...
 
 lint: ## Run linters
 	@echo "Running go fmt..."
