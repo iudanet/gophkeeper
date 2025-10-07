@@ -191,7 +191,18 @@ meta/           - Метаинформация
   - Кросс-компиляция без проблем (не требует CGO)
   - Легче сборка для Windows/Linux/macOS
   - Меньше зависимостей при сборке
-- Подключение: `sql.Open("sqlite", "file:path/to/db.db")`
+
+**SQLite конфигурация:**
+- **WAL mode (Write-Ahead Logging)** - обязательно для production:
+  - Улучшает производительность записи
+  - Позволяет одновременное чтение во время записи
+  - Снижает блокировки базы данных
+  - Стандартная практика для SQLite
+- **Connection pool:** `MaxOpenConns = 1` - критически важно:
+  - SQLite не поддерживает параллельную запись
+  - Множественные соединения вызывают "database is locked"
+  - Одно соединение безопасно для всех операций
+- **Другие pragma:** busy_timeout, foreign_keys
 
 **Миграции:**
 - Использование **goose** для управления миграциями
@@ -221,8 +232,75 @@ func RunMigrations(db *sql.DB) error {
 }
 
 func OpenDB(path string) (*sql.DB, error) {
-    return sql.Open("sqlite", path)
+    // Подключение с pragma параметрами
+    dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)", path)
+    db, err := sql.Open("sqlite", dsn)
+    if err != nil {
+        return nil, err
+    }
+
+    // КРИТИЧЕСКИ ВАЖНО: SQLite не поддерживает параллельную запись
+    // Одно соединение безопасно для всех операций
+    db.SetMaxOpenConns(1)
+
+    // Проверка соединения
+    if err := db.Ping(); err != nil {
+        return nil, err
+    }
+
+    return db, nil
 }
+
+// Альтернативный способ - установка pragma через SQL
+func OpenDBWithPragma(path string) (*sql.DB, error) {
+    db, err := sql.Open("sqlite", path)
+    if err != nil {
+        return nil, err
+    }
+
+    // Установка pragma
+    pragmas := []string{
+        "PRAGMA journal_mode=WAL;",       // WAL режим
+        "PRAGMA busy_timeout=5000;",      // Таймаут 5 секунд
+        "PRAGMA foreign_keys=ON;",        // Внешние ключи
+        "PRAGMA synchronous=NORMAL;",     // Баланс скорости/надежности
+    }
+
+    for _, pragma := range pragmas {
+        if _, err := db.Exec(pragma); err != nil {
+            return nil, fmt.Errorf("failed to set pragma: %w", err)
+        }
+    }
+
+    // MaxOpenConns = 1 для SQLite
+    db.SetMaxOpenConns(1)
+
+    return db, nil
+}
+```
+
+**Объяснение настроек:**
+
+| Настройка | Значение | Причина |
+|-----------|----------|---------|
+| `journal_mode` | WAL | Производительность, параллельное чтение/запись |
+| `busy_timeout` | 5000ms | Ожидание при блокировке, вместо немедленной ошибки |
+| `foreign_keys` | ON | Целостность данных |
+| `synchronous` | NORMAL | Баланс между скоростью и надежностью |
+| `MaxOpenConns` | 1 | **КРИТИЧНО**: предотвращает "database is locked" |
+
+**Почему MaxOpenConns = 1:**
+```
+SQLite имеет одну блокировку записи на весь файл БД.
+Если использовать больше соединений:
+- Connection 1: BEGIN TRANSACTION (получает блокировку)
+- Connection 2: BEGIN TRANSACTION (ждет блокировку)
+- Timeout → "database is locked" error
+
+С одним соединением:
+- Все операции последовательны
+- Нет конкуренции за блокировку
+- Стабильная работа
 ```
 
 **Схема БД:**
@@ -1498,6 +1576,10 @@ server:
 
 database:
   path: ./data/gophkeeper.db
+  # SQLite настройки (встроены в DSN, указаны для документации)
+  # journal_mode: WAL           # Автоматически через DSN
+  # busy_timeout: 5000          # Автоматически через DSN
+  # max_open_conns: 1           # КРИТИЧНО: устанавливается в коде
 
 jwt:
   secret: "random_secret_key_here"
@@ -1510,6 +1592,11 @@ rate_limiting:
   register_attempts: 3
   register_window: 3600      # 1 час
 ```
+
+**ВАЖНО для SQLite:**
+- ✅ WAL mode активируется автоматически через DSN
+- ✅ MaxOpenConns = 1 жестко закодировано (нельзя настроить иначе)
+- ⚠️ Не пытайтесь увеличить connection pool - это вызовет ошибки блокировки
 
 ## 17. Структура проекта
 
