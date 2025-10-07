@@ -1,37 +1,87 @@
 # План выполнения проекта GophKeeper
 
-> Обновлено на основе TECHNICAL_SPEC.md
+> Обновлено на основе TECHNICAL_SPEC.md (версия 2)
+
+## Технологический стек и подходы
+
+### Ключевые технологии:
+- **Go 1.22+** - для использования новых возможностей net/http.ServeMux
+- **SQLite** + **goose** - база данных сервера с миграциями (embed.FS)
+- **BoltDB** - key-value хранилище на клиенте
+- **Argon2id** - key derivation
+- **AES-256-GCM** - шифрование
+- **JWT** - аутентификация
+- **net/http.ServeMux** - HTTP роутер (Go 1.22+)
+- **log/slog** - структурированное логирование
+- **Cobra** - CLI framework
+
+### Подходы к разработке:
+- **Слоистая архитектура** (3 слоя):
+  - Access Layer (HTTP handlers / CLI commands)
+  - Service Layer (бизнес-логика)
+  - Storage Layer (работа с БД)
+- **Table-driven tests** (табличные тесты)
+- **testify** - assertions в тестах
+- **gomock** - моки интерфейсов
+- **TDD workflow**: модуль → тест → запуск → следующий тест
+- **80%+ coverage** обязательно
 
 ## Фаза 1: Инициализация проекта и базовая инфраструктура
 
 ### 1.1 Настройка проекта
 - [ ] Инициализация Go модуля (`go mod init github.com/username/gophkeeper`)
-- [ ] Создание структуры директорий согласно ТЗ
+- [ ] Установка зависимостей:
+  ```bash
+  go get github.com/spf13/cobra
+  go get github.com/pressly/goose/v3
+  go get github.com/stretchr/testify
+  go get go.uber.org/mock/mockgen
+  go get go.etcd.io/bbolt
+  go get github.com/mattn/go-sqlite3
+  go get golang.org/x/crypto/argon2
+  go get github.com/golang-jwt/jwt/v5
+  ```
+- [ ] Создание структуры директорий (слоистая архитектура):
   ```
   cmd/{server,client}/
-  internal/{server,client,crypto,crdt,models,validation}/
-  internal/server/{handlers,middleware,storage,auth}/
-  internal/client/{cli,storage,sync,auth}/
+  internal/server/{handlers,service,storage,middleware}/
+  internal/client/{cli,service,storage}/
+  internal/{crypto,crdt,models,validation}/
   pkg/api/
+  migrations/
   docs/
   ```
-- [ ] Настройка `.gitignore` (бинарники, *.db, .env, coverage.out)
+- [ ] Настройка `.gitignore` (бинарники, *.db, .env, coverage.out, mocks/)
 - [ ] Настройка golangci-lint конфигурации
-- [ ] Создание Makefile с командами build, test, lint
+- [ ] Создание Makefile с командами build, test, lint, generate-mocks
 
-### 1.2 Базовая структура кода
-- [ ] Создание `cmd/server/main.go` с graceful shutdown
-- [ ] Создание `cmd/client/main.go` с Cobra CLI setup
+### 1.2 Базовая структура кода и логирование
+- [ ] Создание `cmd/server/main.go`:
+  - Инициализация slog logger (JSON handler для production)
+  - Graceful shutdown с context
+  - Чтение конфигурации
+- [ ] Создание `cmd/client/main.go`:
+  - Инициализация Cobra CLI
+  - Настройка root command
+  - Инициализация slog logger (Text handler для CLI)
 - [ ] Настройка версионирования (buildVersion, buildDate через ldflags)
 - [ ] Реализация `--version` флага для клиента
 - [ ] Базовая конфигурация (config.yaml, env variables)
+- [ ] Создание helper функций для slog:
+  - `initLogger(level slog.Level)` - инициализация
+  - Middleware для логирования HTTP запросов
+  - Context-aware логирование
 
 ## Фаза 2: Валидация и вспомогательные утилиты
 
 ### 2.1 Валидация (`internal/validation/`)
 - [ ] Реализация `ValidateUsername()` - regex `^[a-zA-Z0-9_]{3,32}$`
 - [ ] Реализация `ValidatePassword()` - минимум 12 символов
-- [ ] Тесты для валидации (граничные случаи, некорректные данные)
+- [ ] **Тесты (testify + table-driven):**
+  - [ ] TestValidateUsername - табличный тест с 6+ cases
+  - [ ] TestValidatePassword - табличный тест с 5+ cases
+  - [ ] Запуск: `go test -v ./internal/validation/`
+  - [ ] Coverage check: `go test -cover ./internal/validation/` (цель: >85%)
 
 ### 2.2 Модели данных (`internal/models/`, `pkg/api/`)
 - [ ] Структура `Credential` (name, login, password, url, notes, metadata)
@@ -77,29 +127,57 @@
 
 ## Фаза 4: Хранилище данных
 
-### 4.1 Серверное хранилище - SQLite (`internal/server/storage/`)
-- [ ] Создание SQL схемы (migrations/001_init.sql):
-  - Таблица `users` (id, username, auth_key_hash, public_salt, created_at, updated_at)
-  - Таблица `refresh_tokens` (id, user_id, token_hash, expires_at, created_at)
-  - Таблица `user_data` (id, user_id, type, data, metadata, version, timestamp, deleted, created_at, updated_at)
-  - Индексы для оптимизации запросов
-- [ ] Реализация миграций (golang-migrate или аналог)
-- [ ] Реализация `UserStorage`:
-  - `CreateUser(username, authKeyHash, publicSalt)` → user_id
-  - `GetUserByUsername(username)` → User
-  - `GetUserByID(id)` → User
-- [ ] Реализация `TokenStorage`:
-  - `SaveRefreshToken(userID, tokenHash, expiresAt)`
-  - `GetRefreshToken(tokenHash)` → token
-  - `DeleteRefreshToken(tokenHash)`
-  - `CleanExpiredTokens()`
-- [ ] Реализация `DataStorage`:
-  - `SaveData(userID, entry)` → id
-  - `GetDataByID(id)` → entry
-  - `GetAllUserData(userID, since)` → []entry
-  - `UpdateData(id, entry)`
-  - `DeleteData(id)` (soft delete)
-- [ ] Тесты для всех storage операций (>80% coverage)
+### 4.1 Серверное хранилище - SQLite + goose миграции (`internal/server/storage/`)
+- [ ] **Создание goose миграций (migrations/*.sql):**
+  - [ ] `migrations/001_init.sql` - создание таблиц:
+    ```sql
+    -- +goose Up
+    CREATE TABLE users (...);
+    CREATE TABLE refresh_tokens (...);
+    CREATE TABLE user_data (...);
+    CREATE INDEX idx_users_username ON users(username);
+
+    -- +goose Down
+    DROP TABLE user_data;
+    DROP TABLE refresh_tokens;
+    DROP TABLE users;
+    ```
+- [ ] **Встраивание миграций в бинарник:**
+  - [ ] Создать `internal/server/storage/migrations.go`:
+    ```go
+    //go:embed migrations/*.sql
+    var embedMigrations embed.FS
+
+    func RunMigrations(db *sql.DB) error {
+        goose.SetBaseFS(embedMigrations)
+        goose.SetDialect("sqlite3")
+        return goose.Up(db, "migrations")
+    }
+    ```
+  - [ ] Вызвать `RunMigrations()` при старте сервера в `cmd/server/main.go`
+- [ ] Тест миграций: проверка Up/Down
+- [ ] **Storage Layer - Интерфейсы (для gomock):**
+  - [ ] Определить `UserRepository` interface:
+    ```go
+    type UserRepository interface {
+        Create(user *User) error
+        GetByUsername(username string) (*User, error)
+        GetByID(id string) (*User, error)
+    }
+    ```
+  - [ ] Определить `TokenRepository` interface
+  - [ ] Определить `DataRepository` interface
+  - [ ] Генерация моков: `make generate-mocks`
+- [ ] **Реализация SQLite storage (реальная имплементация):**
+  - [ ] `userStorage` - имплементирует `UserRepository`
+  - [ ] `tokenStorage` - имплементирует `TokenRepository`
+  - [ ] `dataStorage` - имплементирует `DataRepository`
+- [ ] **Тесты для storage (с in-memory SQLite):**
+  - [ ] TestUserStorage_Create - табличный тест
+  - [ ] TestUserStorage_GetByUsername - табличный тест
+  - [ ] TestTokenStorage_* - тесты с cleanup
+  - [ ] TestDataStorage_* - тесты CRUD операций
+  - [ ] Coverage: >85% для storage layer
 
 ### 4.2 Клиентское хранилище - BoltDB (`internal/client/storage/`)
 - [ ] Создание buckets структуры:

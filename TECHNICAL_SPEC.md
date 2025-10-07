@@ -185,6 +185,30 @@ meta/           - Метаинформация
 
 **Путь к файлу:** конфигурируется, по умолчанию `./data/gophkeeper.db`
 
+**Миграции:**
+- Использование **goose** для управления миграциями
+- Файлы миграций встроены в бинарник через `embed.FS`
+- Автоматический запуск миграций при старте сервера
+- Расположение: `migrations/*.sql`
+- Формат файлов: `001_init.sql`, `002_add_index.sql`, и т.д.
+
+**Пример структуры:**
+```go
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
+
+func RunMigrations(db *sql.DB) error {
+    goose.SetBaseFS(embedMigrations)
+    if err := goose.SetDialect("sqlite3"); err != nil {
+        return err
+    }
+    if err := goose.Up(db, "migrations"); err != nil {
+        return err
+    }
+    return nil
+}
+```
+
 **Схема БД:**
 ```sql
 -- Пользователи
@@ -631,27 +655,315 @@ Enter master password: ********
 Вывод: Сервер НЕ МОЖЕТ расшифровать данные даже при компрометации БД!
 ```
 
-## 12. Безопасность
+## 12. Архитектура приложения
 
-### 12.1. TLS/HTTPS
+### 12.1. Слоистая архитектура (Layered Architecture)
+
+Проект использует **трехслойную архитектуру** для разделения ответственности:
+
+```
+┌─────────────────────────────────────┐
+│   Access Layer (HTTP/CLI)           │  ← Handlers, Commands
+├─────────────────────────────────────┤
+│   Service Layer (Business Logic)    │  ← Services, CRDT, Crypto
+├─────────────────────────────────────┤
+│   Storage Layer (Data Access)       │  ← Repositories, DB
+└─────────────────────────────────────┘
+```
+
+**Слой доступа (Access Layer):**
+- **Сервер:** HTTP handlers (`internal/server/handlers/`)
+  - Парсинг HTTP запросов
+  - Валидация входных данных
+  - Вызов service layer
+  - Формирование HTTP ответов
+  - Не содержит бизнес-логики
+- **Клиент:** CLI commands (`internal/client/cli/`)
+  - Парсинг аргументов командной строки
+  - Интерактивный ввод
+  - Вызов service layer
+  - Вывод результатов пользователю
+
+**Слой сервисов (Service Layer):**
+- **Сервер:** `internal/server/service/`
+  - Бизнес-логика регистрации/аутентификации
+  - JWT генерация и валидация
+  - Логика синхронизации данных
+  - CRDT merge операции
+  - Координация между storage layer
+- **Клиент:** `internal/client/service/`
+  - Бизнес-логика работы с данными
+  - Шифрование/дешифрование
+  - Логика синхронизации
+  - CRDT операции на клиенте
+
+**Слой хранения (Storage Layer):**
+- **Сервер:** `internal/server/storage/`
+  - CRUD операции с БД (SQLite)
+  - Работа с транзакциями
+  - Не содержит бизнес-логики
+- **Клиент:** `internal/client/storage/`
+  - CRUD операции с BoltDB
+  - Работа с buckets
+  - Не содержит бизнес-логики
+
+**Пример структуры (Сервер):**
+```
+internal/server/
+├── handlers/          # Access Layer
+│   ├── auth.go        # HTTP handlers для auth endpoints
+│   ├── sync.go        # HTTP handlers для sync endpoints
+│   └── health.go      # Health check handler
+├── service/           # Service Layer
+│   ├── auth.go        # Логика регистрации/логина
+│   ├── sync.go        # Логика синхронизации
+│   └── token.go       # JWT генерация/валидация
+├── storage/           # Storage Layer
+│   ├── users.go       # Репозиторий пользователей
+│   ├── tokens.go      # Репозиторий токенов
+│   └── data.go        # Репозиторий данных
+└── middleware/        # HTTP middleware
+    ├── auth.go
+    ├── ratelimit.go
+    └── logging.go
+```
+
+**Пример структуры (Клиент):**
+```
+internal/client/
+├── cli/               # Access Layer
+│   ├── auth.go        # Команды register, login, logout
+│   ├── data.go        # Команды add, list, get, update, delete
+│   └── sync.go        # Команда sync
+├── service/           # Service Layer
+│   ├── auth.go        # Логика аутентификации
+│   ├── data.go        # Логика работы с данными
+│   └── sync.go        # Логика синхронизации
+└── storage/           # Storage Layer
+    ├── auth.go        # Работа с auth bucket
+    ├── data.go        # Работа с data bucket
+    └── crdt.go        # Работа с crdt bucket
+```
+
+**Правила взаимодействия:**
+1. Access Layer → Service Layer (✅ разрешено)
+2. Service Layer → Storage Layer (✅ разрешено)
+3. Access Layer → Storage Layer (❌ запрещено, должен идти через Service)
+4. Storage Layer → Service Layer (❌ запрещено, хранилище не вызывает сервисы)
+5. Зависимости через интерфейсы для тестируемости
+
+**Пример:**
+```go
+// Storage Layer (интерфейс)
+type UserRepository interface {
+    Create(user *User) error
+    GetByUsername(username string) (*User, error)
+}
+
+// Service Layer (использует storage через интерфейс)
+type AuthService struct {
+    userRepo UserRepository
+}
+
+func (s *AuthService) Register(username, authKeyHash, publicSalt string) (string, error) {
+    // Бизнес-логика регистрации
+    user := &User{
+        ID: uuid.New().String(),
+        Username: username,
+        AuthKeyHash: authKeyHash,
+        PublicSalt: publicSalt,
+        CreatedAt: time.Now(),
+    }
+    return user.ID, s.userRepo.Create(user)
+}
+
+// Access Layer (использует service через интерфейс)
+type AuthHandler struct {
+    authService *AuthService
+}
+
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+    // Парсинг запроса
+    var req RegisterRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    // Валидация
+    if err := validateUsername(req.Username); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+
+    // Вызов service layer
+    userID, err := h.authService.Register(req.Username, req.AuthKeyHash, req.PublicSalt)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Формирование ответа
+    json.NewEncoder(w).Encode(RegisterResponse{UserID: userID})
+}
+```
+
+### 12.2. HTTP роутер (Сервер)
+
+**Использование:** `net/http.ServeMux` из Go 1.22+
+
+**Новые возможности Go 1.22:**
+- Поддержка методов в паттернах: `"POST /api/v1/auth/login"`
+- Path parameters: `"GET /api/v1/users/{id}"`
+- Более точное сопоставление паттернов
+
+**Пример использования:**
+```go
+// cmd/server/main.go
+func main() {
+    mux := http.NewServeMux()
+
+    // Auth endpoints
+    mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
+    mux.HandleFunc("GET /api/v1/auth/salt/{username}", authHandler.GetSalt)
+    mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
+    mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
+    mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
+
+    // Sync endpoints (защищены auth middleware)
+    mux.HandleFunc("GET /api/v1/sync", authMiddleware(syncHandler.GetSync))
+    mux.HandleFunc("POST /api/v1/sync", authMiddleware(syncHandler.PostSync))
+
+    // Health check
+    mux.HandleFunc("GET /api/v1/health", healthHandler.Health)
+
+    // Middleware stack
+    handler := loggingMiddleware(
+        recoveryMiddleware(
+            rateLimitMiddleware(mux),
+        ),
+    )
+
+    // TLS сервер
+    server := &http.Server{
+        Addr:      ":8080",
+        Handler:   handler,
+        TLSConfig: tlsConfig,
+    }
+
+    log.Println("Starting server on :8080")
+    if err := server.ListenAndServeTLS("cert.pem", "key.pem"); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+**Middleware pattern:**
+```go
+// Middleware signature
+type Middleware func(http.Handler) http.Handler
+
+// Chain multiple middlewares
+func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
+    for i := len(middlewares) - 1; i >= 0; i-- {
+        h = middlewares[i](h)
+    }
+    return h
+}
+```
+
+### 12.3. Логирование
+
+**Использование:** `log/slog` (стандартная библиотека Go 1.21+)
+
+**Уровни логирования:**
+- `DEBUG` - детальная информация для отладки
+- `INFO` - общая информация о работе приложения
+- `WARN` - предупреждения
+- `ERROR` - ошибки
+
+**Структурированное логирование:**
+```go
+// Инициализация (cmd/server/main.go)
+func initLogger() *slog.Logger {
+    opts := &slog.HandlerOptions{
+        Level: slog.LevelInfo,
+    }
+    handler := slog.NewJSONHandler(os.Stdout, opts)
+    logger := slog.New(handler)
+    slog.SetDefault(logger)
+    return logger
+}
+
+// Использование в коде
+logger.Info("user registered",
+    slog.String("username", username),
+    slog.String("user_id", userID),
+)
+
+logger.Error("failed to save user",
+    slog.String("username", username),
+    slog.Any("error", err),
+)
+
+// С контекстом
+logger.InfoContext(ctx, "processing request",
+    slog.String("method", r.Method),
+    slog.String("path", r.URL.Path),
+    slog.Int("status", status),
+    slog.Duration("duration", duration),
+)
+```
+
+**Middleware для логирования запросов:**
+```go
+func LoggingMiddleware(logger *slog.Logger) Middleware {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            start := time.Now()
+
+            // Wrap response writer to capture status code
+            wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+            next.ServeHTTP(wrapped, r)
+
+            logger.Info("http request",
+                slog.String("method", r.Method),
+                slog.String("path", r.URL.Path),
+                slog.Int("status", wrapped.statusCode),
+                slog.Duration("duration", time.Since(start)),
+                slog.String("remote_addr", r.RemoteAddr),
+            )
+        })
+    }
+}
+```
+
+**Важно:**
+- НЕ логировать sensitive данные (пароли, токены, ключи)
+- Использовать структурированное логирование для удобного анализа
+- Логировать request_id для трассировки запросов
+
+## 13. Безопасность
+
+### 13.1. TLS/HTTPS
 - Все коммуникации клиент-сервер только через TLS 1.3
 - Минимальная версия TLS: 1.3
 - Рекомендуемые cipher suites: TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256
 
-### 12.2. Rate Limiting
+### 13.2. Rate Limiting
 ```
 - Логин: максимум 5 попыток за 15 минут с одного IP
 - Регистрация: максимум 3 попытки за час с одного IP
 - Получение salt: максимум 10 запросов в минуту с одного IP
 ```
 
-### 12.3. Логирование
+### 13.3. Логирование с slog
+См. раздел 12.3 для детальной информации о структурированном логировании.
+
 ```
 Логировать:
 ✅ Попытки логина (успешные/неуспешные)
 ✅ Регистрации
-✅ API запросы (метод, путь, статус код)
-✅ Ошибки
+✅ API запросы (метод, путь, статус код, duration)
+✅ Ошибки с контекстом
 
 НЕ логировать:
 ❌ Master password
@@ -662,7 +974,7 @@ Enter master password: ********
 ❌ Любую sensitive информацию
 ```
 
-### 12.4. Восстановление пароля
+### 13.4. Восстановление пароля
 **НЕ ПРЕДУСМОТРЕНО.**
 
 Если пользователь забыл master password, данные потеряны безвозвратно. Это цена zero-knowledge архитектуры.
@@ -671,60 +983,304 @@ Enter master password: ********
 - Emergency Kit при регистрации (экспорт encryption_key в файл)
 - Предупреждение пользователя при регистрации
 
-## 13. Требования к тестированию
+## 14. Требования к тестированию
 
-### 13.1. Unit тесты
-- Минимум 80% coverage для всех пакетов
-- Все exported функции должны иметь тесты
-- Все криптографические функции должны иметь тесты
+### 14.1. Инструменты тестирования
 
-### 13.2. Интеграционные тесты
+**Testing framework:**
+- **testify** - assertion библиотека и test suites
+  - `github.com/stretchr/testify/assert` - assertions
+  - `github.com/stretchr/testify/require` - assertions с остановкой теста
+  - `github.com/stretchr/testify/suite` - test suites (опционально)
+
+**Mocking:**
+- **gomock** - генерация моков из интерфейсов
+  - `go install go.uber.org/mock/mockgen@latest`
+  - Генерация: `mockgen -source=interface.go -destination=mocks/mock.go`
+
+**Стиль тестов:**
+- **Табличные тесты (table-driven tests)** - предпочтительный подход
+- Один тест за раз - запускаем и проверяем перед следующим
+- Тесты пишутся после завершения модуля
+
+### 14.2. Табличные тесты
+
+**Структура табличного теста:**
+```go
+func TestValidateUsername(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        wantErr bool
+        errMsg  string
+    }{
+        {
+            name:    "valid username - lowercase",
+            input:   "alice",
+            wantErr: false,
+        },
+        {
+            name:    "valid username - with underscore",
+            input:   "alice_smith",
+            wantErr: false,
+        },
+        {
+            name:    "valid username - with numbers",
+            input:   "alice123",
+            wantErr: false,
+        },
+        {
+            name:    "invalid - too short",
+            input:   "ab",
+            wantErr: true,
+            errMsg:  "username must be 3-32 characters",
+        },
+        {
+            name:    "invalid - with dot",
+            input:   "alice.smith",
+            wantErr: true,
+            errMsg:  "username can only contain letters, numbers, and underscores",
+        },
+        {
+            name:    "invalid - with special chars",
+            input:   "alice@email",
+            wantErr: true,
+            errMsg:  "username can only contain letters, numbers, and underscores",
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := ValidateUsername(tt.input)
+
+            if tt.wantErr {
+                require.Error(t, err)
+                assert.Contains(t, err.Error(), tt.errMsg)
+            } else {
+                require.NoError(t, err)
+            }
+        })
+    }
+}
+```
+
+**Пример с testify assertions:**
+```go
+func TestDeriveKeys(t *testing.T) {
+    masterPassword := "super_secret_password"
+    username := "alice"
+    salt := make([]byte, 32)
+    rand.Read(salt)
+
+    keys, err := DeriveKeys(masterPassword, username, salt)
+
+    // Базовые проверки
+    require.NoError(t, err)
+    require.NotNil(t, keys)
+
+    // Проверка длины ключей
+    assert.Len(t, keys.AuthKey, 32, "auth key should be 32 bytes")
+    assert.Len(t, keys.EncryptionKey, 32, "encryption key should be 32 bytes")
+
+    // Ключи должны быть разными
+    assert.NotEqual(t, keys.AuthKey, keys.EncryptionKey, "keys must be different")
+
+    // Детерминизм - одинаковые входы должны давать одинаковые ключи
+    keys2, _ := DeriveKeys(masterPassword, username, salt)
+    assert.Equal(t, keys.AuthKey, keys2.AuthKey)
+    assert.Equal(t, keys.EncryptionKey, keys2.EncryptionKey)
+}
+```
+
+### 14.3. Использование gomock
+
+**Пример интерфейса:**
+```go
+// internal/server/storage/users.go
+type UserRepository interface {
+    Create(user *User) error
+    GetByUsername(username string) (*User, error)
+    GetByID(id string) (*User, error)
+}
+```
+
+**Генерация мока:**
+```bash
+mockgen -source=internal/server/storage/users.go \
+        -destination=internal/server/storage/mocks/mock_users.go \
+        -package=mocks
+```
+
+**Использование в тесте:**
+```go
+func TestAuthService_Register(t *testing.T) {
+    ctrl := gomock.NewController(t)
+    defer ctrl.Finish()
+
+    mockRepo := mocks.NewMockUserRepository(ctrl)
+    service := &AuthService{
+        userRepo: mockRepo,
+    }
+
+    tests := []struct {
+        name          string
+        username      string
+        authKeyHash   string
+        publicSalt    string
+        mockSetup     func()
+        wantErr       bool
+    }{
+        {
+            name:        "successful registration",
+            username:    "alice",
+            authKeyHash: "hash123",
+            publicSalt:  "salt123",
+            mockSetup: func() {
+                mockRepo.EXPECT().
+                    Create(gomock.Any()).
+                    Return(nil).
+                    Times(1)
+            },
+            wantErr: false,
+        },
+        {
+            name:        "duplicate username",
+            username:    "alice",
+            authKeyHash: "hash123",
+            publicSalt:  "salt123",
+            mockSetup: func() {
+                mockRepo.EXPECT().
+                    Create(gomock.Any()).
+                    Return(errors.New("UNIQUE constraint failed")).
+                    Times(1)
+            },
+            wantErr: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            tt.mockSetup()
+
+            userID, err := service.Register(tt.username, tt.authKeyHash, tt.publicSalt)
+
+            if tt.wantErr {
+                require.Error(t, err)
+            } else {
+                require.NoError(t, err)
+                assert.NotEmpty(t, userID)
+            }
+        })
+    }
+}
+```
+
+### 14.4. Workflow тестирования
+
+**Порядок разработки:**
+1. Реализовать модуль (функцию, структуру, интерфейс)
+2. Написать **первый тест** (happy path)
+3. Запустить тест: `go test -v -run TestFunctionName`
+4. Если тест проходит → написать **второй тест** (edge case)
+5. Запустить тест
+6. Повторять пункты 4-5 для всех случаев
+7. Проверить coverage: `go test -cover`
+8. Цель: минимум 80% coverage
+
+**Пример workflow:**
+```bash
+# 1. Реализовали функцию ValidateUsername()
+
+# 2. Написали первый тест (happy path)
+# TestValidateUsername с одним case "valid username"
+
+# 3. Запускаем
+go test -v -run TestValidateUsername
+# PASS
+
+# 4. Добавляем второй тест case "too short"
+
+# 5. Запускаем
+go test -v -run TestValidateUsername
+# PASS
+
+# 6. Добавляем остальные cases...
+
+# 7. Проверяем coverage
+go test -cover ./internal/validation/
+# coverage: 85.7% of statements
+```
+
+### 14.5. Coverage требования
+
+- **Минимум 80% coverage** для всех пакетов
+- Обязательные тесты для:
+  - Все exported функции
+  - Все криптографические функции
+  - Все storage операции
+  - Все service методы
+  - Критическая бизнес-логика
+
+**Проверка coverage:**
+```bash
+# Coverage для всего проекта
+go test -coverprofile=coverage.out ./...
+
+# Просмотр coverage в браузере
+go tool cover -html=coverage.out
+
+# Coverage по пакетам
+go test -cover ./...
+```
+
+### 14.6. Интеграционные тесты
 - Полный flow регистрации
 - Полный flow логина
 - Синхронизация между двумя клиентами
 - Разрешение конфликтов CRDT
+- Используют in-memory SQLite для изоляции
 
-### 13.3. E2E тесты (опционально)
+### 14.7. E2E тесты (опционально)
 - Регистрация → добавление данных → логин на втором клиенте → синхронизация
 - Offline работа → online синхронизация
 - Конфликтные изменения на двух клиентах
 
-## 14. Документация
+## 15. Документация
 
-### 14.1. Код
+### 15.1. Код
 - Godoc комментарии для всех exported функций, типов, переменных
 - Godoc комментарии на уровне пакетов (package documentation)
 
-### 14.2. Пользовательская
+### 15.2. Пользовательская
 - README.md с инструкциями по установке и использованию
 - Примеры использования CLI команд
 - Описание архитектуры безопасности
 
-## 15. Опциональные функции
+## 16. Опциональные функции
 
-### 15.1. OTP (One Time Password)
+### 16.1. OTP (One Time Password)
 - Поддержка TOTP (Time-based OTP)
 - Генерация 6-значных кодов
 - Совместимость с Google Authenticator / Authy
 
-### 15.2. TUI (Terminal User Interface)
+### 16.2. TUI (Terminal User Interface)
 - Интерактивный интерфейс в терминале
 - Библиотека: bubbletea или tview
 - Navigation, hot keys, live search
 
-### 15.3. Binary Protocol
+### 16.3. Binary Protocol
 - gRPC вместо REST
 - Protobuf для сериализации
 - Лучшая производительность
 
-### 15.4. Swagger документация
+### 16.4. Swagger документация
 - OpenAPI спецификация
 - Swagger UI для API
 - Автогенерация из кода
 
-## 16. Deployment
+## 17. Deployment
 
-### 16.1. Сборка клиента
+### 17.1. Сборка клиента
 ```bash
 # Cross-compilation для разных платформ
 make build-all
@@ -739,7 +1295,7 @@ GOOS=linux GOARCH=amd64 go build -ldflags "-X main.buildVersion=v1.0.0 -X 'main.
 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.buildVersion=v1.0.0 -X 'main.buildDate=$(date)'" -o gophkeeper-client-mac ./cmd/client
 ```
 
-### 16.2. Сборка сервера
+### 17.2. Сборка сервера
 ```bash
 # Docker образ
 docker build -t gophkeeper-server .
@@ -750,7 +1306,7 @@ go build -o gophkeeper-server ./cmd/server
 ./gophkeeper-server --port 8080 --db /data/gophkeeper.db
 ```
 
-### 16.3. Конфигурация сервера
+### 17.3. Конфигурация сервера
 ```yaml
 # config.yaml
 server:
