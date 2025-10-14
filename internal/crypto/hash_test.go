@@ -76,11 +76,11 @@ func TestVerifyAuthKey(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		authKey        []byte
-		hashedAuthKey  string
-		wantErr        bool
-		errMsg         string
+		name          string
+		authKey       []byte
+		hashedAuthKey string
+		wantErr       bool
+		errMsg        string
 	}{
 		{
 			name:          "successful verification",

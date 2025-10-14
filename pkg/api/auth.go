@@ -2,15 +2,15 @@ package api
 
 // RegisterRequest представляет запрос на регистрацию нового пользователя
 type RegisterRequest struct {
-	Username    string `json:"username"`     // username пользователя
+	Username    string `json:"username"`      // username пользователя
 	AuthKeyHash string `json:"auth_key_hash"` // bcrypt хеш auth_key
 	PublicSalt  string `json:"public_salt"`   // base64 encoded salt (32 bytes)
 }
 
 // RegisterResponse представляет ответ на успешную регистрацию
 type RegisterResponse struct {
-	UserID  string `json:"user_id"`  // UUID пользователя
-	Message string `json:"message"`  // сообщение об успешной регистрации
+	UserID  string `json:"user_id"` // UUID пользователя
+	Message string `json:"message"` // сообщение об успешной регистрации
 }
 
 // GetSaltResponse представляет ответ с публичной солью пользователя

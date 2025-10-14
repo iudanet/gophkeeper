@@ -161,7 +161,7 @@ func TestEncryptDecrypt_Integration(t *testing.T) {
 		[]byte("Привет, мир! 🌍"), // Unicode текст
 		[]byte("12345"),
 		[]byte(`{"username": "alice", "password": "secret123"}`), // JSON
-		make([]byte, 1024), // большой блок данных
+		make([]byte, 1024),                                       // большой блок данных
 	}
 
 	// Заполняем последний тестовый случай случайными данными
@@ -260,11 +260,11 @@ func TestDecryptFromBase64(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
+		name            string
 		encryptedBase64 string
-		key            []byte
-		wantErr        bool
-		errMsg         string
+		key             []byte
+		wantErr         bool
+		errMsg          string
 	}{
 		{
 			name:            "successful decryption from base64",
