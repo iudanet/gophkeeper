@@ -15,4 +15,7 @@ var (
 
 	// ErrInvalidToken indicates that token format is invalid
 	ErrInvalidToken = errors.New("invalid token")
+
+	// ErrEntryNotFound indicates that data entry was not found
+	ErrEntryNotFound = errors.New("entry not found")
 )

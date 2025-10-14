@@ -37,10 +37,10 @@ func TestNewLWWSet(t *testing.T) {
 
 func TestLWWSet_Add(t *testing.T) {
 	tests := []struct {
-		name           string
-		entry          *models.CRDTEntry
-		expectedSize   int
-		expectedAdded  bool
+		name          string
+		entry         *models.CRDTEntry
+		expectedSize  int
+		expectedAdded bool
 	}{
 		{
 			name:          "add new entry",
