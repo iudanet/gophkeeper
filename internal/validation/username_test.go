@@ -11,8 +11,8 @@ func TestValidateUsername(t *testing.T) {
 	tests := []struct {
 		name     string
 		username string
-		wantErr  bool
 		errMsg   string
+		wantErr  bool
 	}{
 		{
 			name:     "valid username - lowercase",
@@ -123,8 +123,8 @@ func TestValidatePassword(t *testing.T) {
 	tests := []struct {
 		name     string
 		password string
-		wantErr  bool
 		errMsg   string
+		wantErr  bool
 	}{
 		{
 			name:     "valid password - exactly 12 chars",

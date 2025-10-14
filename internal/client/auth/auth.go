@@ -24,10 +24,10 @@ func NewService(apiClient *api.Client) *Service {
 
 // RegisterResult содержит результат регистрации
 type RegisterResult struct {
-	UserID         string // UUID пользователя
-	Username       string // username
-	PublicSalt     string // public salt (base64)
-	EncryptionKey  []byte // ключ шифрования (НЕ сохраняется!)
+	UserID        string // UUID пользователя
+	Username      string // username
+	PublicSalt    string // public salt (base64)
+	EncryptionKey []byte // ключ шифрования (НЕ сохраняется!)
 }
 
 // Register регистрирует нового пользователя
@@ -82,12 +82,12 @@ func (s *Service) Register(ctx context.Context, username, masterPassword string)
 
 // LoginResult содержит результат авторизации
 type LoginResult struct {
-	AccessToken    string // JWT access token
-	RefreshToken   string // refresh token
-	ExpiresIn      int64  // время жизни access token в секундах
-	Username       string // username
-	PublicSalt     string // public salt (base64)
-	EncryptionKey  []byte // ключ шифрования (НЕ сохраняется!)
+	AccessToken   string
+	RefreshToken  string
+	Username      string
+	PublicSalt    string
+	EncryptionKey []byte
+	ExpiresIn     int64
 }
 
 // Login выполняет аутентификацию пользователя

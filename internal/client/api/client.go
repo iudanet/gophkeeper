@@ -14,8 +14,8 @@ import (
 
 // Client представляет HTTP клиент для взаимодействия с сервером
 type Client struct {
-	baseURL    string
 	httpClient *http.Client
+	baseURL    string
 }
 
 // NewClient создает новый API клиент

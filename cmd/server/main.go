@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -12,6 +14,8 @@ import (
 	"time"
 
 	"github.com/iudanet/gophkeeper/internal/server/handlers"
+	"github.com/iudanet/gophkeeper/internal/server/jwt"
+	"github.com/iudanet/gophkeeper/internal/server/storage/sqlite"
 )
 
 var (
@@ -26,6 +30,8 @@ func main() {
 	showVersion := flag.Bool("version", false, "Show version information")
 	port := flag.Int("port", 8080, "Server port")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	dbPath := flag.String("db", "gophkeeper.db", "Path to SQLite database file")
+	jwtSecret := flag.String("jwt-secret", "", "JWT secret (auto-generated if empty)")
 	flag.Parse()
 
 	// Show version and exit if requested
@@ -41,10 +47,34 @@ func main() {
 		slog.String("build_date", BuildDate),
 		slog.String("git_commit", GitCommit),
 		slog.Int("port", *port),
+		slog.String("db_path", *dbPath),
 	)
 
+	// Генерируем JWT secret если не указан
+	secret := *jwtSecret
+	if secret == "" {
+		logger.Warn("JWT secret not provided, generating random secret")
+		secret = generateRandomSecret()
+		logger.Info("Generated JWT secret (save this for production)", slog.String("secret", secret))
+	}
+
+	// Инициализация storage
+	ctx := context.Background()
+	storage, err := sqlite.New(ctx, *dbPath)
+	if err != nil {
+		logger.Error("Failed to initialize storage", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer storage.Close()
+	logger.Info("Storage initialized successfully")
+
+	// Инициализация JWT service
+	// Access token: 15 минут, Refresh token: 30 дней
+	jwtService := jwt.NewService(secret, 15*time.Minute, 30*24*time.Hour)
+	logger.Info("JWT service initialized")
+
 	// Создание handlers
-	authHandler := handlers.NewAuthHandler(logger)
+	authHandler := handlers.NewAuthHandler(logger, storage, storage, jwtService)
 	healthHandler := handlers.NewHealthHandler(logger)
 
 	// Настройка роутинга с использованием net/http.ServeMux (Go 1.22+)
@@ -137,4 +167,13 @@ func printVersion() {
 	fmt.Printf("Version:    %s\n", Version)
 	fmt.Printf("Build Date: %s\n", BuildDate)
 	fmt.Printf("Git Commit: %s\n", GitCommit)
+}
+
+// generateRandomSecret генерирует случайный секрет для JWT
+func generateRandomSecret() string {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		panic(fmt.Sprintf("failed to generate random secret: %v", err))
+	}
+	return base64.StdEncoding.EncodeToString(bytes)
 }

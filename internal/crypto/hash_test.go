@@ -10,9 +10,9 @@ import (
 func TestHashAuthKey(t *testing.T) {
 	tests := []struct {
 		name    string
+		errMsg  string
 		authKey []byte
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "successful hash",
@@ -77,10 +77,10 @@ func TestVerifyAuthKey(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		authKey       []byte
 		hashedAuthKey string
-		wantErr       bool
 		errMsg        string
+		authKey       []byte
+		wantErr       bool
 	}{
 		{
 			name:          "successful verification",

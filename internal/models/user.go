@@ -4,19 +4,18 @@ import "time"
 
 // User представляет пользователя в системе
 type User struct {
-	ID          string    `json:"id"`            // UUID пользователя
-	Username    string    `json:"username"`      // уникальный username
-	AuthKeyHash string    `json:"auth_key_hash"` // bcrypt хеш auth_key
-	PublicSalt  string    `json:"public_salt"`   // base64 encoded salt (32 bytes)
-	CreatedAt   time.Time `json:"created_at"`    // время создания
-	UpdatedAt   time.Time `json:"updated_at"`    // время последнего обновления
+	CreatedAt   time.Time  `json:"created_at"`
+	LastLogin   *time.Time `json:"last_login,omitempty"`
+	ID          string     `json:"id"`
+	Username    string     `json:"username"`
+	AuthKeyHash string     `json:"auth_key_hash"`
+	PublicSalt  string     `json:"public_salt"`
 }
 
 // RefreshToken представляет refresh token пользователя
 type RefreshToken struct {
-	ID        string    `json:"id"`         // UUID токена
-	UserID    string    `json:"user_id"`    // ID пользователя
-	TokenHash string    `json:"token_hash"` // bcrypt хеш токена
-	ExpiresAt time.Time `json:"expires_at"` // время истечения
-	CreatedAt time.Time `json:"created_at"` // время создания
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	Token     string    `json:"token"`
+	UserID    string    `json:"user_id"`
 }

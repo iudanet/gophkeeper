@@ -50,9 +50,9 @@ func TestDeriveKeys(t *testing.T) {
 		name           string
 		masterPassword string
 		username       string
+		errMsg         string
 		saltLength     int
 		wantErr        bool
-		errMsg         string
 	}{
 		{
 			name:           "successful key derivation",
@@ -182,8 +182,8 @@ func TestDeriveKeysFromBase64Salt(t *testing.T) {
 		masterPassword string
 		username       string
 		saltBase64     string
-		wantErr        bool
 		errMsg         string
+		wantErr        bool
 	}{
 		{
 			name:           "successful derivation from base64",

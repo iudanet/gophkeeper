@@ -15,10 +15,10 @@ func TestEncrypt(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		errMsg    string
 		plaintext []byte
 		key       []byte
 		wantErr   bool
-		errMsg    string
 	}{
 		{
 			name:      "successful encryption",
@@ -93,10 +93,10 @@ func TestDecrypt(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		errMsg    string
 		encrypted []byte
 		key       []byte
 		wantErr   bool
-		errMsg    string
 	}{
 		{
 			name:      "successful decryption",
@@ -262,9 +262,9 @@ func TestDecryptFromBase64(t *testing.T) {
 	tests := []struct {
 		name            string
 		encryptedBase64 string
+		errMsg          string
 		key             []byte
 		wantErr         bool
-		errMsg          string
 	}{
 		{
 			name:            "successful decryption from base64",

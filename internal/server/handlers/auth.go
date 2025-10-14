@@ -2,22 +2,35 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/iudanet/gophkeeper/internal/models"
+	"github.com/iudanet/gophkeeper/internal/server/jwt"
+	"github.com/iudanet/gophkeeper/internal/server/storage"
 	"github.com/iudanet/gophkeeper/internal/validation"
 	"github.com/iudanet/gophkeeper/pkg/api"
 )
 
 // AuthHandler обрабатывает запросы авторизации
 type AuthHandler struct {
-	logger *slog.Logger
+	logger       *slog.Logger
+	userStorage  storage.UserStorage
+	tokenStorage storage.TokenStorage
+	jwtService   *jwt.Service
 }
 
 // NewAuthHandler создает новый handler для авторизации
-func NewAuthHandler(logger *slog.Logger) *AuthHandler {
+func NewAuthHandler(logger *slog.Logger, userStorage storage.UserStorage, tokenStorage storage.TokenStorage, jwtService *jwt.Service) *AuthHandler {
 	return &AuthHandler{
-		logger: logger,
+		logger:       logger,
+		userStorage:  userStorage,
+		tokenStorage: tokenStorage,
+		jwtService:   jwtService,
 	}
 }
 
@@ -51,15 +64,36 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Сохранить пользователя в базе данных
-	// TODO: Хешировать auth_key_hash (двойное хеширование не нужно, он уже захеширован на клиенте)
-	// TODO: Генерировать UUID для пользователя
+	// Генерируем UUID для пользователя
+	userID := uuid.New().String()
 
-	// Заглушка: возвращаем успешный ответ
-	h.logger.InfoContext(ctx, "user registered successfully (stub)", slog.String("username", req.Username))
+	// Создаем пользователя
+	user := &models.User{
+		ID:          userID,
+		Username:    req.Username,
+		AuthKeyHash: req.AuthKeyHash, // уже bcrypt hash от клиента
+		PublicSalt:  req.PublicSalt,
+		CreatedAt:   time.Now(),
+	}
+
+	// Сохраняем в БД
+	if err := h.userStorage.CreateUser(ctx, user); err != nil {
+		if errors.Is(err, storage.ErrUserAlreadyExists) {
+			h.logger.WarnContext(ctx, "user already exists", slog.String("username", req.Username))
+			h.sendError(w, "username already taken", http.StatusConflict)
+			return
+		}
+		h.logger.ErrorContext(ctx, "failed to create user", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.InfoContext(ctx, "user registered successfully",
+		slog.String("username", req.Username),
+		slog.String("user_id", userID))
 
 	resp := api.RegisterResponse{
-		UserID:  "00000000-0000-0000-0000-000000000000", // заглушка
+		UserID:  userID,
 		Message: "User registered successfully",
 	}
 
@@ -85,14 +119,23 @@ func (h *AuthHandler) GetSalt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Получить public_salt из базы данных по username
-	// TODO: Если пользователь не найден - вернуть 404
+	// Получаем пользователя из БД
+	user, err := h.userStorage.GetUserByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			h.logger.WarnContext(ctx, "user not found", slog.String("username", username))
+			h.sendError(w, "user not found", http.StatusNotFound)
+			return
+		}
+		h.logger.ErrorContext(ctx, "failed to get user", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 
-	// Заглушка: возвращаем тестовую соль
-	h.logger.InfoContext(ctx, "returning public salt (stub)", slog.String("username", username))
+	h.logger.InfoContext(ctx, "returning public salt", slog.String("username", username))
 
 	resp := api.GetSaltResponse{
-		PublicSalt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", // 32 нуля в base64 (заглушка)
+		PublicSalt: user.PublicSalt,
 	}
 
 	h.sendJSON(w, resp, http.StatusOK)
@@ -124,19 +167,72 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Получить пользователя из БД по username
-	// TODO: Проверить auth_key_hash с помощью crypto.VerifyAuthKey()
-	// TODO: Генерировать JWT access token (15 минут)
-	// TODO: Генерировать refresh token (30 дней)
-	// TODO: Сохранить refresh token в БД
+	// Получаем пользователя из БД
+	user, err := h.userStorage.GetUserByUsername(ctx, req.Username)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			h.logger.WarnContext(ctx, "login failed: user not found", slog.String("username", req.Username))
+			h.sendError(w, "invalid credentials", http.StatusUnauthorized)
+			return
+		}
+		h.logger.ErrorContext(ctx, "failed to get user", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 
-	// Заглушка: возвращаем тестовые токены
-	h.logger.InfoContext(ctx, "user logged in successfully (stub)", slog.String("username", req.Username))
+	// Проверяем auth_key_hash
+	// Клиент отправляет bcrypt hash от auth_key, сервер сравнивает его с сохраненным hash
+	if user.AuthKeyHash != req.AuthKeyHash {
+		h.logger.WarnContext(ctx, "login failed: invalid auth key", slog.String("username", req.Username))
+		h.sendError(w, "invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	// Генерируем JWT access token
+	accessToken, expiresIn, err := h.jwtService.GenerateAccessToken(user.ID, user.Username)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "failed to generate access token", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Генерируем refresh token
+	refreshToken, expiresAt, err := h.jwtService.GenerateRefreshToken()
+	if err != nil {
+		h.logger.ErrorContext(ctx, "failed to generate refresh token", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Сохраняем refresh token в БД
+	token := &models.RefreshToken{
+		Token:     refreshToken,
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+	}
+
+	if err := h.tokenStorage.SaveRefreshToken(ctx, token); err != nil {
+		h.logger.ErrorContext(ctx, "failed to save refresh token", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Обновляем last_login
+	now := time.Now()
+	if err := h.userStorage.UpdateLastLogin(ctx, user.ID, now); err != nil {
+		// Не критичная ошибка, логируем но не прерываем
+		h.logger.WarnContext(ctx, "failed to update last login", slog.Any("error", err))
+	}
+
+	h.logger.InfoContext(ctx, "user logged in successfully",
+		slog.String("username", req.Username),
+		slog.String("user_id", user.ID))
 
 	resp := api.TokenResponse{
-		AccessToken:  "stub_access_token_jwt",
-		RefreshToken: "stub_refresh_token",
-		ExpiresIn:    900, // 15 минут
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    expiresIn,
 	}
 
 	h.sendJSON(w, resp, http.StatusOK)
@@ -167,18 +263,76 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Проверить refresh token в БД
-	// TODO: Проверить срок действия
-	// TODO: Генерировать новые access и refresh токены
-	// TODO: Удалить старый refresh token, сохранить новый
+	// Проверяем refresh token в БД
+	storedToken, err := h.tokenStorage.GetRefreshToken(ctx, refreshToken)
+	if err != nil {
+		if errors.Is(err, storage.ErrTokenNotFound) {
+			h.logger.WarnContext(ctx, "refresh token not found")
+			h.sendError(w, "invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+		h.logger.ErrorContext(ctx, "failed to get refresh token", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 
-	// Заглушка: возвращаем новые тестовые токены
-	h.logger.InfoContext(ctx, "tokens refreshed successfully (stub)")
+	// Проверяем срок действия
+	if time.Now().After(storedToken.ExpiresAt) {
+		h.logger.WarnContext(ctx, "refresh token expired", slog.String("user_id", storedToken.UserID))
+		h.sendError(w, "refresh token expired", http.StatusUnauthorized)
+		return
+	}
+
+	// Получаем пользователя для генерации нового access token
+	user, err := h.userStorage.GetUserByID(ctx, storedToken.UserID)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "failed to get user", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Генерируем новый access token
+	newAccessToken, expiresIn, err := h.jwtService.GenerateAccessToken(user.ID, user.Username)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "failed to generate access token", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Генерируем новый refresh token
+	newRefreshToken, newExpiresAt, err := h.jwtService.GenerateRefreshToken()
+	if err != nil {
+		h.logger.ErrorContext(ctx, "failed to generate refresh token", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Удаляем старый refresh token
+	if err := h.tokenStorage.DeleteRefreshToken(ctx, refreshToken); err != nil {
+		h.logger.WarnContext(ctx, "failed to delete old refresh token", slog.Any("error", err))
+		// Продолжаем выполнение
+	}
+
+	// Сохраняем новый refresh token
+	newToken := &models.RefreshToken{
+		Token:     newRefreshToken,
+		UserID:    user.ID,
+		ExpiresAt: newExpiresAt,
+		CreatedAt: time.Now(),
+	}
+
+	if err := h.tokenStorage.SaveRefreshToken(ctx, newToken); err != nil {
+		h.logger.ErrorContext(ctx, "failed to save refresh token", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.InfoContext(ctx, "tokens refreshed successfully", slog.String("user_id", user.ID))
 
 	resp := api.TokenResponse{
-		AccessToken:  "stub_new_access_token_jwt",
-		RefreshToken: "stub_new_refresh_token",
-		ExpiresIn:    900, // 15 минут
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresIn:    expiresIn,
 	}
 
 	h.sendJSON(w, resp, http.StatusOK)
@@ -196,11 +350,38 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Извлечь user_id из JWT access token
-	// TODO: Удалить все refresh tokens пользователя из БД
+	// Извлекаем access token из Authorization header
+	const bearerPrefix = "Bearer "
+	if len(authHeader) < len(bearerPrefix) || authHeader[:len(bearerPrefix)] != bearerPrefix {
+		h.sendError(w, "invalid Authorization header format", http.StatusUnauthorized)
+		return
+	}
 
-	// Заглушка: успешный выход
-	h.logger.InfoContext(ctx, "user logged out successfully (stub)")
+	accessToken := authHeader[len(bearerPrefix):]
+	if accessToken == "" {
+		h.sendError(w, "access token is required", http.StatusUnauthorized)
+		return
+	}
+
+	// Валидируем и парсим access token
+	claims, err := h.jwtService.ValidateAccessToken(accessToken)
+	if err != nil {
+		h.logger.WarnContext(ctx, "invalid access token", slog.Any("error", err))
+		h.sendError(w, "invalid or expired access token", http.StatusUnauthorized)
+		return
+	}
+
+	// Удаляем все refresh tokens пользователя
+	deletedCount, err := h.tokenStorage.DeleteUserTokens(ctx, claims.UserID)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "failed to delete user tokens", slog.Any("error", err))
+		h.sendError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.InfoContext(ctx, "user logged out successfully",
+		slog.String("user_id", claims.UserID),
+		slog.Int("tokens_deleted", deletedCount))
 
 	w.WriteHeader(http.StatusNoContent)
 }
