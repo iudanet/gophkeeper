@@ -65,7 +65,11 @@ func main() {
 		logger.Error("Failed to initialize storage", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer storage.Close()
+	defer func() {
+		if err := storage.Close(); err != nil {
+			logger.Error("Failed to close storage", slog.Any("error", err))
+		}
+	}()
 	logger.Info("Storage initialized successfully")
 
 	// Инициализация JWT service

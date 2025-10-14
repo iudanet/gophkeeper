@@ -30,7 +30,7 @@ func New(ctx context.Context, dbPath string) (*Storage, error) {
 
 	// Проверяем соединение
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -49,7 +49,7 @@ func New(ctx context.Context, dbPath string) (*Storage, error) {
 
 	for _, pragma := range pragmas {
 		if _, err := db.ExecContext(ctx, pragma); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("failed to set pragma: %w", err)
 		}
 	}
@@ -58,7 +58,7 @@ func New(ctx context.Context, dbPath string) (*Storage, error) {
 
 	// Запускаем миграции
 	if err := storage.runMigrations(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
@@ -73,7 +73,9 @@ func (s *Storage) Close() error {
 // runMigrations выполняет миграции из embedded FS
 func (s *Storage) runMigrations() error {
 	// Устанавливаем dialect для SQLite
-	goose.SetDialect("sqlite3")
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return fmt.Errorf("failed to set goose dialect: %w", err)
+	}
 
 	// Устанавливаем источник миграций из embedded FS
 	goose.SetBaseFS(embedMigrations)

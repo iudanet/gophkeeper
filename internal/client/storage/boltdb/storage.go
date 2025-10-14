@@ -31,7 +31,7 @@ func New(ctx context.Context, dbPath string) (*Storage, error) {
 
 	// Инициализируем buckets
 	if err := storage.initBuckets(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to initialize buckets: %w", err)
 	}
 
