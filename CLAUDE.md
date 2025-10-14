@@ -60,6 +60,33 @@ go run ./cmd/server
 go run ./cmd/client
 ```
 
+## Development Workflow
+
+### Tracking Progress in PROJECT_PLAN.md
+
+**IMPORTANT:** When completing any task or implementing any feature, you MUST update the corresponding checkbox in `PROJECT_PLAN.md`.
+
+**Rules:**
+1. Before starting work on a feature/task, check `PROJECT_PLAN.md` to find the relevant section
+2. After completing any task (writing code, creating tests, implementing feature):
+   - Update the checkbox from `[ ]` to `[x]` in `PROJECT_PLAN.md`
+   - Add status markers: ✅ for completed, ⚠️ for partial, ❌ for not started
+   - Add coverage percentage if tests were written
+3. If a task is partially completed, mark it as ⚠️ and add a comment explaining what's done and what's missing
+4. This ensures accurate project status tracking and helps identify remaining work
+
+**Example workflow:**
+```
+1. User asks to implement feature X
+2. Check PROJECT_PLAN.md - find "Feature X" under Фаза N
+3. Implement Feature X
+4. Write tests for Feature X
+5. Update PROJECT_PLAN.md:
+   - [x] Feature X implementation ✅
+   - [x] Tests for Feature X (Coverage: 85%) ✅
+6. Continue to next task
+```
+
 ## Architecture
 
 ### Server Responsibilities
