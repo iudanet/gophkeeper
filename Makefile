@@ -58,13 +58,15 @@ fmt: ## Format code with gofmt, goimports, and fieldalignment
 	@echo "Running goimports..."
 	@goimports -w .
 	@echo "Running fieldalignment..."
-	@$(GOCMD) run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment -fix ./...
+	@fieldalignment -fix ./...
 
 lint: ## Run linters
 	@echo "Running go fmt..."
 	@$(GOFMT) ./...
 	@echo "Running go vet..."
 	@$(GOVET) ./...
+	@echo "Running golangci-lint..."
+	@golangci-lint run ./...
 
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
