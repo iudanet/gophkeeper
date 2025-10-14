@@ -1,33 +1,29 @@
 package crypto
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
-// BcryptCost определяет стоимость bcrypt (по умолчанию DefaultCost = 10)
-// Более высокое значение = медленнее, но безопаснее
-const BcryptCost = bcrypt.DefaultCost
-
-// HashAuthKey хеширует auth_key с использованием bcrypt
-// Используется на клиенте перед отправкой на сервер
-// и на сервере для хранения в базе данных
+// HashAuthKey хеширует auth_key с использованием SHA256
+// Используется на клиенте и сервере для детерминированного хеширования
+// auth_key уже защищен через Argon2id, SHA256 добавляет дополнительный слой
 func HashAuthKey(authKey []byte) (string, error) {
 	if len(authKey) == 0 {
 		return "", fmt.Errorf("auth key cannot be empty")
 	}
 
-	hashedBytes, err := bcrypt.GenerateFromPassword(authKey, BcryptCost)
-	if err != nil {
-		return "", fmt.Errorf("failed to hash auth key: %w", err)
-	}
+	// SHA256 хеширование
+	hash := sha256.Sum256(authKey)
 
-	return string(hashedBytes), nil
+	// Возвращаем hex-encoded строку
+	return hex.EncodeToString(hash[:]), nil
 }
 
 // VerifyAuthKey проверяет, соответствует ли auth_key сохраненному хешу
 // Используется на сервере для аутентификации пользователя
+// Просто сравнивает два SHA256 хеша (детерминированные)
 func VerifyAuthKey(authKey []byte, hashedAuthKey string) error {
 	if len(authKey) == 0 {
 		return fmt.Errorf("auth key cannot be empty")
@@ -36,12 +32,15 @@ func VerifyAuthKey(authKey []byte, hashedAuthKey string) error {
 		return fmt.Errorf("hashed auth key cannot be empty")
 	}
 
-	err := bcrypt.CompareHashAndPassword([]byte(hashedAuthKey), authKey)
+	// Вычисляем хеш от переданного ключа
+	computedHash, err := HashAuthKey(authKey)
 	if err != nil {
-		if err == bcrypt.ErrMismatchedHashAndPassword {
-			return fmt.Errorf("invalid auth key")
-		}
-		return fmt.Errorf("failed to verify auth key: %w", err)
+		return fmt.Errorf("failed to compute auth key hash: %w", err)
+	}
+
+	// Сравниваем хеши
+	if computedHash != hashedAuthKey {
+		return fmt.Errorf("invalid auth key")
 	}
 
 	return nil

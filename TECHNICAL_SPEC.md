@@ -35,7 +35,7 @@ Master Password + Username + Public Salt →
 3. Клиент вычисляет:
    - `auth_key = Argon2(master_password + username + "auth", salt)`
    - `encryption_key = Argon2(master_password + username + "encrypt", salt)`
-4. Клиент хеширует auth_key: `auth_key_hash = bcrypt(auth_key)`
+4. Клиент хеширует auth_key: `auth_key_hash = SHA256(auth_key)` (hex-encoded)
 5. Клиент отправляет на сервер: username, auth_key_hash, public_salt
 6. Клиент сохраняет локально: username, public_salt
 
@@ -50,7 +50,7 @@ POST /api/v1/auth/register
 Request:
 {
   "username": "alice",
-  "auth_key_hash": "bcrypt_hash",
+  "auth_key_hash": "sha256_hex_hash",
   "public_salt": "base64_encoded_32_bytes"
 }
 
@@ -67,13 +67,13 @@ Response:
 1. Пользователь вводит username и master password
 2. Клиент запрашивает public_salt с сервера по username
 3. Клиент вычисляет auth_key и encryption_key (как при регистрации)
-4. Клиент хеширует auth_key и отправляет на сервер
+4. Клиент хеширует auth_key: `auth_key_hash = SHA256(auth_key)` и отправляет на сервер
 5. Клиент получает JWT токены
 6. Клиент сохраняет локально: username, public_salt, токены (зашифрованные)
 
 **Процесс (сервер):**
 1. Получение username и auth_key_hash
-2. Проверка auth_key_hash с сохраненным в БД
+2. Проверка auth_key_hash с сохраненным в БД (простое строковое сравнение SHA256 хешей)
 3. Генерация JWT access_token (15 минут) и refresh_token (30 дней)
 4. Возврат токенов
 
@@ -89,7 +89,7 @@ POST /api/v1/auth/login
 Request:
 {
   "username": "alice",
-  "auth_key_hash": "bcrypt_hash"
+  "auth_key_hash": "sha256_hex_hash"
 }
 
 Response:

@@ -3,7 +3,7 @@ package api
 // RegisterRequest представляет запрос на регистрацию нового пользователя
 type RegisterRequest struct {
 	Username    string `json:"username"`      // username пользователя
-	AuthKeyHash string `json:"auth_key_hash"` // bcrypt хеш auth_key
+	AuthKeyHash string `json:"auth_key_hash"` // SHA256 хеш auth_key (hex-encoded)
 	PublicSalt  string `json:"public_salt"`   // base64 encoded salt (32 bytes)
 }
 
@@ -21,7 +21,7 @@ type GetSaltResponse struct {
 // LoginRequest представляет запрос на аутентификацию
 type LoginRequest struct {
 	Username    string `json:"username"`      // username пользователя
-	AuthKeyHash string `json:"auth_key_hash"` // bcrypt хеш auth_key
+	AuthKeyHash string `json:"auth_key_hash"` // SHA256 хеш auth_key (hex-encoded)
 }
 
 // TokenResponse представляет ответ с токенами доступа

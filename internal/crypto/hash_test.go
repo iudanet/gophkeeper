@@ -45,18 +45,18 @@ func TestHashAuthKey(t *testing.T) {
 				require.NoError(t, err)
 				assert.NotEmpty(t, hashedAuthKey)
 
-				// Проверяем, что хеш начинается с префикса bcrypt
-				assert.Contains(t, hashedAuthKey, "$2a$", "bcrypt hash должен начинаться с $2a$")
+				// SHA256 хеш всегда 64 символа (hex-encoded, 32 bytes * 2)
+				assert.Len(t, hashedAuthKey, 64, "SHA256 hash должен быть 64 символа")
 
-				// Проверяем, что хеш имеет разумную длину (bcrypt хеш обычно 60 символов)
-				assert.Greater(t, len(hashedAuthKey), 50, "bcrypt hash должен быть длиннее 50 символов")
+				// Проверяем, что это валидный hex
+				assert.Regexp(t, "^[a-f0-9]{64}$", hashedAuthKey, "должен быть hex-encoded")
 			}
 		})
 	}
 }
 
-func TestHashAuthKey_Randomness(t *testing.T) {
-	// Проверяем, что одинаковые входные данные дают разные хеши (из-за случайной соли в bcrypt)
+func TestHashAuthKey_Deterministic(t *testing.T) {
+	// Проверяем, что SHA256 детерминирован (одинаковый вход = одинаковый хеш)
 	authKey := []byte("test_auth_key_123")
 
 	hash1, err1 := HashAuthKey(authKey)
@@ -65,8 +65,18 @@ func TestHashAuthKey_Randomness(t *testing.T) {
 	hash2, err2 := HashAuthKey(authKey)
 	require.NoError(t, err2)
 
-	// Хеши должны быть разными из-за разных солей
-	assert.NotEqual(t, hash1, hash2, "bcrypt должен генерировать разные хеши для одинаковых входных данных")
+	// Хеши должны быть одинаковыми (детерминированность SHA256)
+	assert.Equal(t, hash1, hash2, "SHA256 должен генерировать одинаковые хеши для одинаковых входных данных")
+}
+
+func TestHashAuthKey_KnownVector(t *testing.T) {
+	// Тест с известным вектором
+	authKey := []byte("test")
+	expectedHash := "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" // SHA256("test")
+
+	hash, err := HashAuthKey(authKey)
+	require.NoError(t, err)
+	assert.Equal(t, expectedHash, hash)
 }
 
 func TestVerifyAuthKey(t *testing.T) {
@@ -108,13 +118,6 @@ func TestVerifyAuthKey(t *testing.T) {
 			hashedAuthKey: "",
 			wantErr:       true,
 			errMsg:        "hashed auth key cannot be empty",
-		},
-		{
-			name:          "invalid hash format",
-			authKey:       validAuthKey,
-			hashedAuthKey: "invalid_hash",
-			wantErr:       true,
-			errMsg:        "failed to verify auth key",
 		},
 	}
 

@@ -71,7 +71,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	user := &models.User{
 		ID:          userID,
 		Username:    req.Username,
-		AuthKeyHash: req.AuthKeyHash, // уже bcrypt hash от клиента
+		AuthKeyHash: req.AuthKeyHash, // SHA256 хеш auth_key от клиента
 		PublicSalt:  req.PublicSalt,
 		CreatedAt:   time.Now(),
 	}
@@ -181,7 +181,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверяем auth_key_hash
-	// Клиент отправляет bcrypt hash от auth_key, сервер сравнивает его с сохраненным hash
+	// Клиент отправляет SHA256 хеш от auth_key (детерминированный)
+	// Сервер сравнивает с сохраненным хешем (простое строковое сравнение)
 	if user.AuthKeyHash != req.AuthKeyHash {
 		h.logger.WarnContext(ctx, "login failed: invalid auth key", slog.String("username", req.Username))
 		h.sendError(w, "invalid credentials", http.StatusUnauthorized)
