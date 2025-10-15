@@ -22,7 +22,7 @@
 
 ### Частично (3 фазы):
 - API (~70%) — ✅ auth handlers с тестами, sync endpoints готовы
-- Сервер (~50%) — отсутствует TLS, частично middleware, ✅ auth handlers с тестами
+- Сервер (~70%) — ✅ Recovery/Logging/RateLimit middleware с тестами (100% coverage), ✅ auth handlers с тестами, ❌ отсутствует TLS
 - Клиент (~85%) — ✅ register/login/logout с шифрованием токенов, ✅ CRDT storage с тестами, ✅ data service с тестами, ✅ CLI: add/list/get/delete/sync для credentials, ✅ sync logic с тестами (90.4% coverage), ❌ text/binary/card types, ❌ client/api тесты
 
 ### Не начато (4+ фаз):
@@ -30,7 +30,6 @@
 
 ### Критические проблемы:
 - Отсутствует TLS (HTTPS)
-- Middleware: нет rate limiting, логирования, recovery
 - Отсутствуют тесты для client/api модуля
 - Реализован только тип данных credential (нужны: text, binary, card)
 
@@ -57,15 +56,17 @@
 - **✅ Client Sync Service — полная реализация синхронизации с сервером (push/pull/merge)**
 - **✅ Client Sync Service тесты — 10 comprehensive тестов, 90.4% coverage**
 - **✅ Metadata Storage — сохранение lastSyncTimestamp для оптимизации синхронизации**
+- **✅ Server Middleware — Recovery, Logging, RateLimit с comprehensive тестами (100% coverage)**
+- **✅ RateLimit защита для auth endpoints (10 req/min для login/register/getSalt)**
 
 ---
 
 ## Основные оставшиеся задачи (приоритет)
 
-1. **Middleware**:
-   - RateLimit (login, register, getSalt)
-   - Logging (без sensitive)
-   - Recovery
+1. ✅ ~~**Middleware**~~ (ЗАВЕРШЕНО - 100% coverage):
+   - ✅ RateLimit (10 req/min для login, register, getSalt) с token bucket алгоритмом
+   - ✅ Logging (структурированное логирование без sensitive данных)
+   - ✅ Recovery (перехват паник с полным stack trace)
 2. **TLS конфигурация для сервера и клиента** (Let's Encrypt)
 3. **Client-side**:
    - ✅ ~~Полная реализация sync logic (fetch, merge, push)~~ (ЗАВЕРШЕНО - 90.4% coverage)
@@ -95,7 +96,7 @@
 | Шаг | Описание | Статус |
 |------|-----------|--------|
 | 1 | ✅ Покрыть тестами auth handlers | **Завершено** (82.5% coverage) |
-| 2 | Реализовать RateLimit, Logging, Recovery middleware | Не сделано |
+| 2 | ✅ Реализовать RateLimit, Logging, Recovery middleware | **Завершено** (100% coverage) |
 | 3 | Реализовать TLS (сервер + клиент) | Не сделано |
 | 4 | ✅ Разработать CRDT Storage + Data Service для клиента | **Завершено** (с тестами, >80% coverage) |
 | 5 | ✅ Реализовать CLI команды для credentials (add/list/get/delete) | **Завершено** (~350 строк) |

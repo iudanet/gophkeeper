@@ -90,26 +90,43 @@ func main() {
 	// Настройка роутинга с использованием net/http.ServeMux (Go 1.22+)
 	mux := http.NewServeMux()
 
-	// Auth endpoints
-	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
-	mux.HandleFunc("GET /api/v1/auth/salt/{username}", authHandler.GetSalt)
-	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
+	// Создаем rate limiters для критичных endpoints
+	// Для login, register, getSalt - более строгие лимиты (защита от brute-force)
+	authRateLimit := middleware.RateLimitMiddleware(10, 1*time.Minute, logger) // 10 запросов в минуту
+
+	// Auth endpoints (с rate limiting для защиты от brute-force)
+	mux.Handle("POST /api/v1/auth/register", authRateLimit(http.HandlerFunc(authHandler.Register)))
+	mux.Handle("GET /api/v1/auth/salt/{username}", authRateLimit(http.HandlerFunc(authHandler.GetSalt)))
+	mux.Handle("POST /api/v1/auth/login", authRateLimit(http.HandlerFunc(authHandler.Login)))
 	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
 	mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
 
-	// Health check
+	// Health check (без rate limiting)
 	mux.HandleFunc("GET /api/v1/health", healthHandler.Health)
 
-	// Sync endpoints (защищены AuthMiddleware)
+	// Sync endpoints (защищены AuthMiddleware, без rate limiting для синхронизации)
 	authMiddleware := middleware.AuthMiddleware(logger, jwtConfig)
 	mux.Handle("GET /api/v1/sync", authMiddleware(http.HandlerFunc(syncHandler.HandleSync)))
 	mux.Handle("POST /api/v1/sync", authMiddleware(http.HandlerFunc(syncHandler.HandleSync)))
+
+	// Применяем глобальные middleware (порядок важен!)
+	// 1. Recovery - перехватывает паники (самый верхний уровень)
+	// 2. Logging - логирует все запросы
+	var handler http.Handler = mux
+	handler = middleware.LoggingMiddleware(logger)(handler)
+	handler = middleware.RecoveryMiddleware(logger)(handler)
+
+	logger.Info("Middleware configured",
+		slog.String("recovery", "enabled"),
+		slog.String("logging", "enabled"),
+		slog.String("rate_limit_auth", "10 req/min"),
+	)
 
 	// Создание HTTP сервера
 	addr := fmt.Sprintf(":%d", *port)
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
