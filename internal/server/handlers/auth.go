@@ -133,7 +133,7 @@ func (h *AuthHandler) GetSalt(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.InfoContext(ctx, "returning public salt", slog.String("username", username))
 
-	resp := api.GetSaltResponse{
+	resp := api.SaltResponse{
 		PublicSalt: user.PublicSalt,
 	}
 

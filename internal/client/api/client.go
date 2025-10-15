@@ -51,8 +51,8 @@ func (c *Client) Register(ctx context.Context, req api.RegisterRequest) (*api.Re
 }
 
 // GetSalt получает public_salt пользователя
-func (c *Client) GetSalt(ctx context.Context, username string) (*api.GetSaltResponse, error) {
-	var resp api.GetSaltResponse
+func (c *Client) GetSalt(ctx context.Context, username string) (*api.SaltResponse, error) {
+	var resp api.SaltResponse
 	url := fmt.Sprintf("/api/v1/auth/salt/%s", username)
 	err := c.doRequest(ctx, "GET", url, nil, &resp)
 	if err != nil {

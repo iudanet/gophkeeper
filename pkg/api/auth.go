@@ -13,13 +13,10 @@ type RegisterResponse struct {
 	Message string `json:"message"` // сообщение об успешной регистрации
 }
 
-// GetSaltResponse представляет ответ с публичной солью пользователя
-type GetSaltResponse struct {
+// SaltResponse представляет ответ с публичной солью пользователя
+type SaltResponse struct {
 	PublicSalt string `json:"public_salt"` // base64 encoded salt
 }
-
-// SaltResponse alias for GetSaltResponse for backward compatibility
-type SaltResponse = GetSaltResponse
 
 // LoginRequest представляет запрос на аутентификацию
 type LoginRequest struct {
@@ -32,12 +29,6 @@ type TokenResponse struct {
 	AccessToken  string `json:"access_token"`  // JWT access token
 	RefreshToken string `json:"refresh_token"` // refresh token
 	ExpiresIn    int64  `json:"expires_in"`    // время жизни access token в секундах
-}
-
-// RefreshTokenRequest представляет запрос на обновление токенов
-// Refresh token передается в header Authorization: Bearer <refresh_token>
-type RefreshTokenRequest struct {
-	// RefreshToken передается через Authorization header
 }
 
 // ErrorResponse представляет ответ с ошибкой
