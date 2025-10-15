@@ -155,3 +155,384 @@ func (s *Service) DeleteCredential(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// AddTextData adds new text data to local storage
+func (s *Service) AddTextData(ctx context.Context, userID string, text *models.TextData) error {
+	// Генерируем ID если не задан
+	if text.ID == "" {
+		text.ID = uuid.New().String()
+	}
+
+	// Сериализуем text data в JSON
+	textJSON, err := json.Marshal(text)
+	if err != nil {
+		return fmt.Errorf("failed to marshal text data: %w", err)
+	}
+
+	// Шифруем данные
+	encryptedData, err := crypto.Encrypt(textJSON, s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt text data: %w", err)
+	}
+
+	// Сериализуем metadata
+	metadataJSON, err := json.Marshal(text.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Шифруем metadata
+	encryptedMetadata, err := crypto.Encrypt(metadataJSON, s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt metadata: %w", err)
+	}
+
+	// Создаем CRDT entry
+	now := time.Now()
+	entry := &models.CRDTEntry{
+		ID:        text.ID,
+		UserID:    userID,
+		Type:      models.DataTypeText,
+		NodeID:    s.nodeID,
+		Data:      encryptedData,
+		Metadata:  encryptedMetadata,
+		Version:   1,
+		Timestamp: now.Unix(),
+		Deleted:   false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// Сохраняем в локальное хранилище
+	if err := s.crdtStorage.SaveEntry(ctx, entry); err != nil {
+		return fmt.Errorf("failed to save entry: %w", err)
+	}
+
+	return nil
+}
+
+// GetTextData retrieves and decrypts text data by ID
+func (s *Service) GetTextData(ctx context.Context, id string) (*models.TextData, error) {
+	// Получаем CRDT entry
+	entry, err := s.crdtStorage.GetEntry(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entry: %w", err)
+	}
+
+	// Проверяем тип
+	if entry.Type != models.DataTypeText {
+		return nil, fmt.Errorf("entry is not text data, got type: %s", entry.Type)
+	}
+
+	// Проверяем что не удалено
+	if entry.Deleted {
+		return nil, fmt.Errorf("text data is deleted")
+	}
+
+	// Расшифровываем данные
+	decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt text data: %w", err)
+	}
+
+	// Десериализуем
+	var text models.TextData
+	if err := json.Unmarshal(decryptedData, &text); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal text data: %w", err)
+	}
+
+	return &text, nil
+}
+
+// ListTextData returns all text data entries for the user
+func (s *Service) ListTextData(ctx context.Context) ([]*models.TextData, error) {
+	// Получаем все активные entries типа text
+	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeText)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entries: %w", err)
+	}
+
+	textData := make([]*models.TextData, 0, len(entries))
+	for _, entry := range entries {
+		// Расшифровываем данные
+		decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+		if err != nil {
+			// Пропускаем поврежденные записи
+			continue
+		}
+
+		// Десериализуем
+		var text models.TextData
+		if err := json.Unmarshal(decryptedData, &text); err != nil {
+			// Пропускаем поврежденные записи
+			continue
+		}
+
+		textData = append(textData, &text)
+	}
+
+	return textData, nil
+}
+
+// DeleteTextData marks text data as deleted (soft delete)
+func (s *Service) DeleteTextData(ctx context.Context, id string) error {
+	now := time.Now()
+	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), s.nodeID); err != nil {
+		return fmt.Errorf("failed to delete text data: %w", err)
+	}
+	return nil
+}
+
+// AddBinaryData adds new binary data to local storage
+func (s *Service) AddBinaryData(ctx context.Context, userID string, binary *models.BinaryData) error {
+	// Генерируем ID если не задан
+	if binary.ID == "" {
+		binary.ID = uuid.New().String()
+	}
+
+	// Сериализуем binary data в JSON
+	binaryJSON, err := json.Marshal(binary)
+	if err != nil {
+		return fmt.Errorf("failed to marshal binary data: %w", err)
+	}
+
+	// Шифруем данные
+	encryptedData, err := crypto.Encrypt(binaryJSON, s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt binary data: %w", err)
+	}
+
+	// Сериализуем metadata
+	metadataJSON, err := json.Marshal(binary.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Шифруем metadata
+	encryptedMetadata, err := crypto.Encrypt(metadataJSON, s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt metadata: %w", err)
+	}
+
+	// Создаем CRDT entry
+	now := time.Now()
+	entry := &models.CRDTEntry{
+		ID:        binary.ID,
+		UserID:    userID,
+		Type:      models.DataTypeBinary,
+		NodeID:    s.nodeID,
+		Data:      encryptedData,
+		Metadata:  encryptedMetadata,
+		Version:   1,
+		Timestamp: now.Unix(),
+		Deleted:   false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// Сохраняем в локальное хранилище
+	if err := s.crdtStorage.SaveEntry(ctx, entry); err != nil {
+		return fmt.Errorf("failed to save entry: %w", err)
+	}
+
+	return nil
+}
+
+// GetBinaryData retrieves and decrypts binary data by ID
+func (s *Service) GetBinaryData(ctx context.Context, id string) (*models.BinaryData, error) {
+	// Получаем CRDT entry
+	entry, err := s.crdtStorage.GetEntry(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entry: %w", err)
+	}
+
+	// Проверяем тип
+	if entry.Type != models.DataTypeBinary {
+		return nil, fmt.Errorf("entry is not binary data, got type: %s", entry.Type)
+	}
+
+	// Проверяем что не удалено
+	if entry.Deleted {
+		return nil, fmt.Errorf("binary data is deleted")
+	}
+
+	// Расшифровываем данные
+	decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt binary data: %w", err)
+	}
+
+	// Десериализуем
+	var binary models.BinaryData
+	if err := json.Unmarshal(decryptedData, &binary); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal binary data: %w", err)
+	}
+
+	return &binary, nil
+}
+
+// ListBinaryData returns all binary data entries for the user
+func (s *Service) ListBinaryData(ctx context.Context) ([]*models.BinaryData, error) {
+	// Получаем все активные entries типа binary
+	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeBinary)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entries: %w", err)
+	}
+
+	binaryData := make([]*models.BinaryData, 0, len(entries))
+	for _, entry := range entries {
+		// Расшифровываем данные
+		decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+		if err != nil {
+			// Пропускаем поврежденные записи
+			continue
+		}
+
+		// Десериализуем
+		var binary models.BinaryData
+		if err := json.Unmarshal(decryptedData, &binary); err != nil {
+			// Пропускаем поврежденные записи
+			continue
+		}
+
+		binaryData = append(binaryData, &binary)
+	}
+
+	return binaryData, nil
+}
+
+// DeleteBinaryData marks binary data as deleted (soft delete)
+func (s *Service) DeleteBinaryData(ctx context.Context, id string) error {
+	now := time.Now()
+	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), s.nodeID); err != nil {
+		return fmt.Errorf("failed to delete binary data: %w", err)
+	}
+	return nil
+}
+
+// AddCardData adds new card data to local storage
+func (s *Service) AddCardData(ctx context.Context, userID string, card *models.CardData) error {
+	// Генерируем ID если не задан
+	if card.ID == "" {
+		card.ID = uuid.New().String()
+	}
+
+	// Сериализуем card data в JSON
+	cardJSON, err := json.Marshal(card)
+	if err != nil {
+		return fmt.Errorf("failed to marshal card data: %w", err)
+	}
+
+	// Шифруем данные
+	encryptedData, err := crypto.Encrypt(cardJSON, s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt card data: %w", err)
+	}
+
+	// Сериализуем metadata
+	metadataJSON, err := json.Marshal(card.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Шифруем metadata
+	encryptedMetadata, err := crypto.Encrypt(metadataJSON, s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt metadata: %w", err)
+	}
+
+	// Создаем CRDT entry
+	now := time.Now()
+	entry := &models.CRDTEntry{
+		ID:        card.ID,
+		UserID:    userID,
+		Type:      models.DataTypeCard,
+		NodeID:    s.nodeID,
+		Data:      encryptedData,
+		Metadata:  encryptedMetadata,
+		Version:   1,
+		Timestamp: now.Unix(),
+		Deleted:   false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// Сохраняем в локальное хранилище
+	if err := s.crdtStorage.SaveEntry(ctx, entry); err != nil {
+		return fmt.Errorf("failed to save entry: %w", err)
+	}
+
+	return nil
+}
+
+// GetCardData retrieves and decrypts card data by ID
+func (s *Service) GetCardData(ctx context.Context, id string) (*models.CardData, error) {
+	// Получаем CRDT entry
+	entry, err := s.crdtStorage.GetEntry(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entry: %w", err)
+	}
+
+	// Проверяем тип
+	if entry.Type != models.DataTypeCard {
+		return nil, fmt.Errorf("entry is not card data, got type: %s", entry.Type)
+	}
+
+	// Проверяем что не удалено
+	if entry.Deleted {
+		return nil, fmt.Errorf("card data is deleted")
+	}
+
+	// Расшифровываем данные
+	decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt card data: %w", err)
+	}
+
+	// Десериализуем
+	var card models.CardData
+	if err := json.Unmarshal(decryptedData, &card); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal card data: %w", err)
+	}
+
+	return &card, nil
+}
+
+// ListCardData returns all card data entries for the user
+func (s *Service) ListCardData(ctx context.Context) ([]*models.CardData, error) {
+	// Получаем все активные entries типа card
+	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeCard)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entries: %w", err)
+	}
+
+	cardData := make([]*models.CardData, 0, len(entries))
+	for _, entry := range entries {
+		// Расшифровываем данные
+		decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+		if err != nil {
+			// Пропускаем поврежденные записи
+			continue
+		}
+
+		// Десериализуем
+		var card models.CardData
+		if err := json.Unmarshal(decryptedData, &card); err != nil {
+			// Пропускаем поврежденные записи
+			continue
+		}
+
+		cardData = append(cardData, &card)
+	}
+
+	return cardData, nil
+}
+
+// DeleteCardData marks card data as deleted (soft delete)
+func (s *Service) DeleteCardData(ctx context.Context, id string) error {
+	now := time.Now()
+	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), s.nodeID); err != nil {
+		return fmt.Errorf("failed to delete card data: %w", err)
+	}
+	return nil
+}

@@ -388,11 +388,11 @@ func runAdd(ctx context.Context, args []string, boltStorage *boltdb.Storage) err
 	case "credential":
 		return runAddCredential(ctx, boltStorage)
 	case "text":
-		return fmt.Errorf("'add text' not implemented yet")
+		return runAddText(ctx, boltStorage)
 	case "binary":
-		return fmt.Errorf("'add binary' not implemented yet")
+		return fmt.Errorf("'add binary' not fully implemented yet. Use: gophkeeper add text for now")
 	case "card":
-		return fmt.Errorf("'add card' not implemented yet")
+		return runAddCard(ctx, boltStorage)
 	default:
 		return fmt.Errorf("unknown data type: %s. Use: credential, text, binary, or card", dataType)
 	}
@@ -498,6 +498,154 @@ func runAddCredential(ctx context.Context, boltStorage *boltdb.Storage) error {
 	fmt.Printf("Login: %s\n", login)
 	fmt.Println()
 	fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server.")
+
+	return nil
+}
+
+func runAddText(ctx context.Context, boltStorage *boltdb.Storage) error {
+	fmt.Println("=== Add Text Data ===")
+	fmt.Println()
+
+	authData, err := boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("Enter text data details:")
+	fmt.Println()
+
+	name, err := readInput("Name (e.g., 'Secret Note'): ")
+	if err != nil || name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+
+	content, err := readInput("Content: ")
+	if err != nil || content == "" {
+		return fmt.Errorf("content cannot be empty")
+	}
+
+	textData := &models.TextData{
+		Name:    name,
+		Content: content,
+		Metadata: models.Metadata{
+			Favorite: false,
+			Tags:     []string{},
+		},
+	}
+
+	userID := authData.Username
+	nodeID := fmt.Sprintf("%s-client", authData.Username)
+	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+
+	if err := dataService.AddTextData(ctx, userID, textData); err != nil {
+		return fmt.Errorf("failed to add text data: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ Text data added successfully!")
+	fmt.Printf("Name: %s\n", name)
+	fmt.Println()
+	fmt.Println("Note: Data is stored locally. Run 'gophkeeper sync' to sync with server.")
+
+	return nil
+}
+
+func runAddCard(ctx context.Context, boltStorage *boltdb.Storage) error {
+	fmt.Println("=== Add Card Data ===")
+	fmt.Println()
+
+	authData, err := boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("Enter card details:")
+	fmt.Println()
+
+	name, err := readInput("Card Name (e.g., 'Visa Gold'): ")
+	if err != nil || name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+
+	number, err := readInput("Card Number: ")
+	if err != nil || number == "" {
+		return fmt.Errorf("card number cannot be empty")
+	}
+
+	holder, err := readInput("Card Holder: ")
+	if err != nil {
+		return fmt.Errorf("failed to read holder: %w", err)
+	}
+
+	expiry, err := readInput("Expiry (MM/YY): ")
+	if err != nil {
+		return fmt.Errorf("failed to read expiry: %w", err)
+	}
+
+	cvv, err := readPassword("CVV: ")
+	if err != nil {
+		return fmt.Errorf("failed to read CVV: %w", err)
+	}
+
+	pin, err := readPassword("PIN (optional): ")
+	if err != nil {
+		return fmt.Errorf("failed to read PIN: %w", err)
+	}
+
+	cardData := &models.CardData{
+		Name:   name,
+		Number: number,
+		Holder: holder,
+		Expiry: expiry,
+		CVV:    cvv,
+		PIN:    pin,
+		Metadata: models.Metadata{
+			Favorite: false,
+			Tags:     []string{},
+		},
+	}
+
+	userID := authData.Username
+	nodeID := fmt.Sprintf("%s-client", authData.Username)
+	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+
+	if err := dataService.AddCardData(ctx, userID, cardData); err != nil {
+		return fmt.Errorf("failed to add card: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ Card added successfully!")
+	fmt.Printf("Name: %s\n", name)
+	fmt.Println()
+	fmt.Println("Note: Card is stored locally. Run 'gophkeeper sync' to sync with server.")
 
 	return nil
 }
