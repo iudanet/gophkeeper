@@ -35,7 +35,8 @@ func testHandler(t *testing.T, expectedUserID, expectedUsername string) http.Han
 		assert.Equal(t, expectedUsername, username)
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, ett := w.Write([]byte("OK"))
+		assert.NoError(t, ett)
 	}
 }
 
