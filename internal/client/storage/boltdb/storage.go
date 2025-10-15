@@ -43,7 +43,9 @@ func (s *Storage) Close() error {
 	if s.db == nil {
 		return nil
 	}
-	return s.db.Close()
+	err := s.db.Close()
+	s.db = nil // Устанавливаем в nil после закрытия
+	return err
 }
 
 // initBuckets создает необходимые buckets если они не существуют

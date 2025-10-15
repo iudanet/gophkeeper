@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/errors"
 
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/models"
@@ -316,7 +317,7 @@ func (s *Storage) Clear(ctx context.Context) error {
 
 	err := s.db.Update(func(tx *bbolt.Tx) error {
 		// Удаляем bucket полностью
-		if err := tx.DeleteBucket(crdtBucket); err != nil && err != bbolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket(crdtBucket); err != nil && err != errors.ErrBucketNotFound {
 			return fmt.Errorf("failed to delete bucket: %w", err)
 		}
 
