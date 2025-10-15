@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -860,4 +861,72 @@ func TestAuthHandler_Login_SaveTokenError(t *testing.T) {
 	handler.Login(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestAuthHandler_GetSalt_DBError(t *testing.T) {
+	logger := setupTestLogger()
+
+	userStorage := &mockUserStorage{
+		getUserError: fmt.Errorf("db error"),
+		users:        make(map[string]*models.User),
+	}
+	handler := NewAuthHandler(logger, userStorage, nil, JWTConfig{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/salt/testuser", nil)
+	req.SetPathValue("username", "testuser")
+
+	w := httptest.NewRecorder()
+	handler.GetSalt(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestAuthHandler_Refresh_SaveRefreshTokenError(t *testing.T) {
+	logger := setupTestLogger()
+
+	userStorage := &mockUserStorage{
+		users: map[string]*models.User{
+			"user1": {ID: "user1", Username: "user1"},
+		},
+	}
+	tokenStorage := &mockTokenStorage{
+		tokens: map[string]*models.RefreshToken{
+			"valid_token": {
+				Token:     "valid_token",
+				UserID:    "user1",
+				ExpiresAt: time.Now().Add(1 * time.Hour),
+				CreatedAt: time.Now(),
+			},
+		},
+		saveError: fmt.Errorf("save error"),
+	}
+
+	jwtConfig := JWTConfig{
+		Secret:          []byte("test-secret"),
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+
+	handler := NewAuthHandler(logger, userStorage, tokenStorage, jwtConfig)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	req.Header.Set("Authorization", "Bearer valid_token")
+
+	w := httptest.NewRecorder()
+	handler.Refresh(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestAuthHandler_Logout_InvalidFormat(t *testing.T) {
+	logger := setupTestLogger()
+	handler := NewAuthHandler(logger, nil, nil, JWTConfig{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer") // без токена
+
+	w := httptest.NewRecorder()
+	handler.Logout(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

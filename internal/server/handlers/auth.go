@@ -340,6 +340,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 // Logout обрабатывает POST /api/v1/auth/logout
 // Выход пользователя (удаление refresh token)
+// TODO сейчас выходит из всех устройств. надо сделать выход только с 1 например через ID устройства
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
