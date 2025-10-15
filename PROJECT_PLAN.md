@@ -104,7 +104,7 @@
 
   # Криптография
   go get golang.org/x/crypto/argon2@latest    # ✅
-  go get github.com/golang-jwt/jwt/v5@latest  # используется встроенный JWT
+  go get github.com/golang-jwt/jwt/v5@latest  # ✅ используется
 
   # Тестирование
   go get github.com/stretchr/testify@latest   # ✅

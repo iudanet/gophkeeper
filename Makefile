@@ -39,6 +39,10 @@ test-unit: ## Run unit tests
 	@echo "Running unit tests..."
 	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
+test-short: ## Run unit tests
+	@echo "Running unit tests..."
+	$(GOTEST) -race -coverprofile=coverage.out -covermode=atomic ./...
+
 test-integration: ## Run integration tests
 	@echo "Running integration tests..."
 	$(GOTEST) -v -race -tags=integration ./test/integration/...

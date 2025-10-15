@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/iudanet/gophkeeper/internal/server/handlers"
+	"github.com/iudanet/gophkeeper/internal/server/middleware"
 	"github.com/iudanet/gophkeeper/internal/server/storage/sqlite"
 )
 
@@ -83,6 +84,7 @@ func main() {
 	// Создание handlers
 	authHandler := handlers.NewAuthHandler(logger, storage, storage, jwtConfig)
 	healthHandler := handlers.NewHealthHandler(logger)
+	syncHandler := handlers.NewSyncHandler(logger, storage)
 
 	// Настройка роутинга с использованием net/http.ServeMux (Go 1.22+)
 	mux := http.NewServeMux()
@@ -96,6 +98,11 @@ func main() {
 
 	// Health check
 	mux.HandleFunc("GET /api/v1/health", healthHandler.Health)
+
+	// Sync endpoints (защищены AuthMiddleware)
+	authMiddleware := middleware.AuthMiddleware(logger, jwtConfig)
+	mux.Handle("GET /api/v1/sync", authMiddleware(http.HandlerFunc(syncHandler.HandleSync)))
+	mux.Handle("POST /api/v1/sync", authMiddleware(http.HandlerFunc(syncHandler.HandleSync)))
 
 	// Создание HTTP сервера
 	addr := fmt.Sprintf(":%d", *port)
