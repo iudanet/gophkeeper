@@ -19,9 +19,9 @@ func TestUserStorage_CreateUser(t *testing.T) {
 	defer cleanup()
 
 	tests := []struct {
-		name      string
-		user      *models.User
 		wantError error
+		user      *models.User
+		name      string
 	}{
 		{
 			name: "create new user successfully",
@@ -115,9 +115,9 @@ func TestUserStorage_GetUserByUsername(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
+		wantError error
 		name      string
 		username  string
-		wantError error
 	}{
 		{
 			name:      "get existing user",
@@ -168,9 +168,9 @@ func TestUserStorage_GetUserByID(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
+		wantError error
 		name      string
 		userID    string
-		wantError error
 	}{
 		{
 			name:      "get existing user",
@@ -219,9 +219,9 @@ func TestUserStorage_UpdateUser(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
-		updates   *models.User
 		wantError error
+		updates   *models.User
+		name      string
 	}{
 		{
 			name: "update username and hash",
@@ -283,9 +283,9 @@ func TestUserStorage_DeleteUser(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
+		wantError error
 		name      string
 		userID    string
-		wantError error
 	}{
 		{
 			name:      "delete existing user",
@@ -334,10 +334,10 @@ func TestUserStorage_UpdateLastLogin(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
-		userID    string
 		loginTime time.Time
 		wantError error
+		name      string
+		userID    string
 	}{
 		{
 			name:      "update last login for existing user",

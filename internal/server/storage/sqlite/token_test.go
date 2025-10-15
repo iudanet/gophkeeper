@@ -20,8 +20,8 @@ func TestTokenStorage_SaveRefreshToken(t *testing.T) {
 	userID := createTestUser(t, ctx, s)
 
 	tests := []struct {
-		name  string
 		token *models.RefreshToken
+		name  string
 	}{
 		{
 			name: "save new refresh token",
@@ -75,9 +75,9 @@ func TestTokenStorage_GetRefreshToken(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
+		wantError error
 		name      string
 		token     string
-		wantError error
 	}{
 		{
 			name:      "get existing token",
@@ -241,9 +241,9 @@ func TestTokenStorage_DeleteRefreshToken(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
+		wantError error
 		name      string
 		token     string
-		wantError error
 	}{
 		{
 			name:      "delete existing token",

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/iudanet/gophkeeper/internal/server/handlers"
-	"github.com/iudanet/gophkeeper/internal/server/jwt"
 	"github.com/iudanet/gophkeeper/internal/server/storage/sqlite"
 )
 
@@ -72,13 +71,17 @@ func main() {
 	}()
 	logger.Info("Storage initialized successfully")
 
-	// Инициализация JWT service
+	// Создание JWT конфигурации
 	// Access token: 15 минут, Refresh token: 30 дней
-	jwtService := jwt.NewService(secret, 15*time.Minute, 30*24*time.Hour)
-	logger.Info("JWT service initialized")
+	jwtConfig := handlers.JWTConfig{
+		Secret:          []byte(secret),
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+	logger.Info("JWT configuration initialized")
 
 	// Создание handlers
-	authHandler := handlers.NewAuthHandler(logger, storage, storage, jwtService)
+	authHandler := handlers.NewAuthHandler(logger, storage, storage, jwtConfig)
 	healthHandler := handlers.NewHealthHandler(logger)
 
 	// Настройка роутинга с использованием net/http.ServeMux (Go 1.22+)

@@ -22,8 +22,8 @@ func TestDataStorage_SaveEntry_Create(t *testing.T) {
 	userID := createTestUser(t, ctx, s)
 
 	tests := []struct {
-		name      string
 		entry     *models.CRDTEntry
+		name      string
 		wantSaved bool
 	}{
 		{
@@ -131,8 +131,8 @@ func TestDataStorage_SaveEntry_CRDT_Conflict(t *testing.T) {
 	assert.True(t, saved)
 
 	tests := []struct {
-		name      string
 		entry     *models.CRDTEntry
+		name      string
 		wantSaved bool
 	}{
 		{

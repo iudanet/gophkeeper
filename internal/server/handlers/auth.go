@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/iudanet/gophkeeper/internal/models"
-	"github.com/iudanet/gophkeeper/internal/server/jwt"
 	"github.com/iudanet/gophkeeper/internal/server/storage"
 	"github.com/iudanet/gophkeeper/internal/validation"
 	"github.com/iudanet/gophkeeper/pkg/api"
@@ -21,16 +20,16 @@ type AuthHandler struct {
 	logger       *slog.Logger
 	userStorage  storage.UserStorage
 	tokenStorage storage.TokenStorage
-	jwtService   *jwt.Service
+	jwtConfig    JWTConfig
 }
 
 // NewAuthHandler создает новый handler для авторизации
-func NewAuthHandler(logger *slog.Logger, userStorage storage.UserStorage, tokenStorage storage.TokenStorage, jwtService *jwt.Service) *AuthHandler {
+func NewAuthHandler(logger *slog.Logger, userStorage storage.UserStorage, tokenStorage storage.TokenStorage, jwtConfig JWTConfig) *AuthHandler {
 	return &AuthHandler{
 		logger:       logger,
 		userStorage:  userStorage,
 		tokenStorage: tokenStorage,
-		jwtService:   jwtService,
+		jwtConfig:    jwtConfig,
 	}
 }
 
@@ -190,7 +189,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерируем JWT access token
-	accessToken, expiresIn, err := h.jwtService.GenerateAccessToken(user.ID, user.Username)
+	accessToken, expiresIn, err := GenerateAccessToken(h.jwtConfig, user.ID, user.Username)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to generate access token", slog.Any("error", err))
 		h.sendError(w, "internal server error", http.StatusInternalServerError)
@@ -198,7 +197,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерируем refresh token
-	refreshToken, expiresAt, err := h.jwtService.GenerateRefreshToken()
+	refreshToken, expiresAt, err := GenerateRefreshToken(h.jwtConfig)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to generate refresh token", slog.Any("error", err))
 		h.sendError(w, "internal server error", http.StatusInternalServerError)
@@ -293,7 +292,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерируем новый access token
-	newAccessToken, expiresIn, err := h.jwtService.GenerateAccessToken(user.ID, user.Username)
+	newAccessToken, expiresIn, err := GenerateAccessToken(h.jwtConfig, user.ID, user.Username)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to generate access token", slog.Any("error", err))
 		h.sendError(w, "internal server error", http.StatusInternalServerError)
@@ -301,7 +300,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерируем новый refresh token
-	newRefreshToken, newExpiresAt, err := h.jwtService.GenerateRefreshToken()
+	newRefreshToken, newExpiresAt, err := GenerateRefreshToken(h.jwtConfig)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to generate refresh token", slog.Any("error", err))
 		h.sendError(w, "internal server error", http.StatusInternalServerError)
@@ -365,7 +364,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Валидируем и парсим access token
-	claims, err := h.jwtService.ValidateAccessToken(accessToken)
+	claims, err := ValidateAccessToken(h.jwtConfig, accessToken)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid access token", slog.Any("error", err))
 		h.sendError(w, "invalid or expired access token", http.StatusUnauthorized)

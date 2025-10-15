@@ -6,38 +6,18 @@ import "time"
 // Используется для синхронизации данных между несколькими клиентами
 // с автоматическим разрешением конфликтов.
 type CRDTEntry struct {
-	// ID уникальный идентификатор записи (UUID)
-	ID string `json:"id"`
+	CreatedAt time.Time `json:"created_at"` // CreatedAt время создания записи (для информации)
 
-	// UserID идентификатор владельца записи
-	UserID string `json:"user_id"`
-
-	// Type тип данных: "credential", "text", "binary", "card"
-	Type string `json:"type"`
-
-	// Data зашифрованные данные (JSON сериализованный и зашифрованный объект)
-	Data []byte `json:"data"`
-
-	// Metadata зашифрованные метаданные
-	Metadata []byte `json:"metadata"`
-
-	// Version монотонно растущая версия записи
-	Version int64 `json:"version"`
-
-	// Timestamp Lamport timestamp для упорядочивания событий
-	Timestamp int64 `json:"timestamp"`
-
-	// NodeID идентификатор узла (клиента), создавшего эту версию
-	NodeID string `json:"node_id"`
-
-	// Deleted флаг soft delete (true = запись удалена)
-	Deleted bool `json:"deleted"`
-
-	// CreatedAt время создания записи (для информации)
-	CreatedAt time.Time `json:"created_at"`
-
-	// UpdatedAt время последнего обновления (для информации)
-	UpdatedAt time.Time `json:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at"` // UpdatedAt время последнего обновления (для информации)
+	ID        string    `json:"id"`         // ID уникальный идентификатор записи (UUID)
+	UserID    string    `json:"user_id"`    // UserID идентификатор владельца записи
+	Type      string    `json:"type"`       // Type тип данных: "credential", "text", "binary", "card"
+	NodeID    string    `json:"node_id"`    // NodeID идентификатор узла (клиента), создавшего эту версию
+	Data      []byte    `json:"data"`       // Data зашифрованные данные (JSON сериализованный и зашифрованный объект)
+	Metadata  []byte    `json:"metadata"`   // Metadata зашифрованные метаданные
+	Version   int64     `json:"version"`    // Version монотонно растущая версия записи
+	Timestamp int64     `json:"timestamp"`  // Timestamp Lamport timestamp для упорядочивания событий
+	Deleted   bool      `json:"deleted"`    // Deleted флаг soft delete (true = запись удалена)
 }
 
 // DataType константы для типов данных
