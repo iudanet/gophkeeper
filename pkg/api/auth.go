@@ -18,6 +18,9 @@ type GetSaltResponse struct {
 	PublicSalt string `json:"public_salt"` // base64 encoded salt
 }
 
+// SaltResponse alias for GetSaltResponse for backward compatibility
+type SaltResponse = GetSaltResponse
+
 // LoginRequest представляет запрос на аутентификацию
 type LoginRequest struct {
 	Username    string `json:"username"`      // username пользователя
