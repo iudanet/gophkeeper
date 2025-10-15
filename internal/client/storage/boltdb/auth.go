@@ -11,86 +11,65 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 )
 
+var _ storage.AuthStorage = (*Storage)(nil) // если это реализовано (скорее всего да)
+
 var authKey = []byte("current")
 
-// SaveAuth stores authentication data
+// SaveAuth сохраняет AuthData в BoltDB как есть, не шифрует токены
 func (s *Storage) SaveAuth(ctx context.Context, auth *storage.AuthData) error {
+	data, err := json.Marshal(auth)
+	if err != nil {
+		return err
+	}
 	return s.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(bucketAuth)
-		if bucket == nil {
+		b := tx.Bucket(bucketAuth)
+		if b == nil {
 			return fmt.Errorf("auth bucket not found")
 		}
-
-		// Сериализуем данные в JSON
-		data, err := json.Marshal(auth)
-		if err != nil {
-			return fmt.Errorf("failed to marshal auth data: %w", err)
-		}
-
-		// Сохраняем в bucket
-		if err := bucket.Put(authKey, data); err != nil {
-			return fmt.Errorf("failed to save auth data: %w", err)
-		}
-
-		return nil
+		return b.Put(authKey, data)
 	})
 }
 
-// GetAuth retrieves stored authentication data
+// GetAuth получает данные аутентификации из BoltDB
 func (s *Storage) GetAuth(ctx context.Context) (*storage.AuthData, error) {
-	var auth *storage.AuthData
-
+	var data []byte
 	err := s.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(bucketAuth)
-		if bucket == nil {
+		b := tx.Bucket(bucketAuth)
+		if b == nil {
 			return fmt.Errorf("auth bucket not found")
 		}
-
-		// Получаем данные
-		data := bucket.Get(authKey)
-		if data == nil {
+		val := b.Get(authKey)
+		if val == nil {
 			return storage.ErrAuthNotFound
 		}
-
-		// Десериализуем
-		auth = &storage.AuthData{}
-		if err := json.Unmarshal(data, auth); err != nil {
-			return fmt.Errorf("failed to unmarshal auth data: %w", err)
-		}
-
+		data = append([]byte(nil), val...)
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
-	return auth, nil
+	var auth storage.AuthData
+	if err := json.Unmarshal(data, &auth); err != nil {
+		return nil, err
+	}
+	return &auth, nil
 }
 
-// DeleteAuth removes stored authentication data (logout)
+// DeleteAuth удаляет все данные авторизации
 func (s *Storage) DeleteAuth(ctx context.Context) error {
 	return s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(bucketAuth)
 		if bucket == nil {
 			return fmt.Errorf("auth bucket not found")
 		}
-
-		// Проверяем существование данных
 		if bucket.Get(authKey) == nil {
 			return storage.ErrAuthNotFound
 		}
-
-		// Удаляем данные
-		if err := bucket.Delete(authKey); err != nil {
-			return fmt.Errorf("failed to delete auth data: %w", err)
-		}
-
-		return nil
+		return bucket.Delete(authKey)
 	})
 }
 
-// IsAuthenticated checks if valid authentication exists
+// IsAuthenticated проверяет, что в локальном хранилище есть валидные auth данные (токен не просрочен)
 func (s *Storage) IsAuthenticated(ctx context.Context) (bool, error) {
 	auth, err := s.GetAuth(ctx)
 	if err != nil {
@@ -100,8 +79,8 @@ func (s *Storage) IsAuthenticated(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	// Проверяем, не истек ли токен
-	if time.Now().After(auth.ExpiresAt) {
+	expiresAt := time.Unix(auth.ExpiresAt, 0)
+	if time.Now().After(expiresAt) {
 		return false, nil
 	}
 

@@ -71,6 +71,69 @@ func (c *Client) Login(ctx context.Context, req api.LoginRequest) (*api.TokenRes
 	return &resp, nil
 }
 
+// Logout выполняет выход из системы
+func (c *Client) Logout(ctx context.Context, accessToken string) error {
+	return c.doAuthRequest(ctx, "POST", "/api/v1/auth/logout", accessToken, nil, nil)
+}
+
+// doAuthRequest выполняет HTTP запрос с авторизацией
+func (c *Client) doAuthRequest(ctx context.Context, method, path, token string, body, result interface{}) error {
+	url := c.baseURL + path
+
+	var bodyReader io.Reader
+	if body != nil {
+		jsonData, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request body: %w", err)
+		}
+		bodyReader = bytes.NewReader(jsonData)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Добавляем Authorization header
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	// Читаем тело ответа
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Проверяем статус код
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var errResp api.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err == nil {
+			return fmt.Errorf("server error (%d): %s", resp.StatusCode, errResp.Message)
+		}
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Декодируем успешный ответ
+	if result != nil {
+		if err := json.Unmarshal(respBody, result); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // doRequest выполняет HTTP запрос
 func (c *Client) doRequest(ctx context.Context, method, path string, body, result interface{}) error {
 	url := c.baseURL + path
