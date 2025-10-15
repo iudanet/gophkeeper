@@ -15,9 +15,11 @@ import (
 
 	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
+	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 	"github.com/iudanet/gophkeeper/internal/crypto"
+	"github.com/iudanet/gophkeeper/internal/models"
 )
 
 var (
@@ -90,6 +92,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "add":
+		if err := runAdd(ctx, args[1:], boltStorage); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -113,18 +120,20 @@ func printUsage() {
 	fmt.Println("Options:")
 	fmt.Println("  --version          Show version information")
 	fmt.Println("  --server URL       Server URL (default: http://localhost:8080)")
-	fmt.Println("  --db PATH          Path to local database (default: gophkeeper.db)")
+	fmt.Println("  --db PATH          Path to local database (default: gophkeeper-client.db)")
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  register           Register new user")
 	fmt.Println("  login              Login to server")
 	fmt.Println("  logout             Logout from server")
 	fmt.Println("  status             Show authentication status")
+	fmt.Println("  add credential     Add new credential (login/password)")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  gophkeeper register")
 	fmt.Println("  gophkeeper login")
 	fmt.Println("  gophkeeper logout")
+	fmt.Println("  gophkeeper add credential")
 	fmt.Println("  gophkeeper --server https://example.com login")
 }
 
@@ -336,4 +345,130 @@ func readPassword(prompt string) (string, error) {
 		return "", err
 	}
 	return string(passwordBytes), nil
+}
+
+func runAdd(ctx context.Context, args []string, boltStorage *boltdb.Storage) error {
+	// Проверяем подкоманду
+	if len(args) == 0 {
+		return fmt.Errorf("missing data type. Usage: gophkeeper add <credential|text|binary|card>")
+	}
+
+	dataType := args[0]
+
+	switch dataType {
+	case "credential":
+		return runAddCredential(ctx, boltStorage)
+	case "text":
+		return fmt.Errorf("'add text' not implemented yet")
+	case "binary":
+		return fmt.Errorf("'add binary' not implemented yet")
+	case "card":
+		return fmt.Errorf("'add card' not implemented yet")
+	default:
+		return fmt.Errorf("unknown data type: %s. Use: credential, text, binary, or card", dataType)
+	}
+}
+
+func runAddCredential(ctx context.Context, boltStorage *boltdb.Storage) error {
+	fmt.Println("=== Add Credential ===")
+	fmt.Println()
+
+	// Проверяем авторизацию
+	authData, err := boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	// Запрашиваем master password для получения encryption_key
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Деривируем ключи
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("Enter credential details:")
+	fmt.Println()
+
+	// Запрашиваем данные credentials
+	name, err := readInput("Name (e.g., 'GitHub', 'Gmail'): ")
+	if err != nil {
+		return fmt.Errorf("failed to read name: %w", err)
+	}
+	if name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+
+	login, err := readInput("Login/Email: ")
+	if err != nil {
+		return fmt.Errorf("failed to read login: %w", err)
+	}
+	if login == "" {
+		return fmt.Errorf("login cannot be empty")
+	}
+
+	password, err := readPassword("Password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+
+	url, err := readInput("URL (optional): ")
+	if err != nil {
+		return fmt.Errorf("failed to read URL: %w", err)
+	}
+
+	notes, err := readInput("Notes (optional): ")
+	if err != nil {
+		return fmt.Errorf("failed to read notes: %w", err)
+	}
+
+	// Создаем credential
+	cred := &models.Credential{
+		Name:     name,
+		Login:    login,
+		Password: password,
+		URL:      url,
+		Notes:    notes,
+		Metadata: models.Metadata{
+			Favorite: false,
+			Tags:     []string{},
+		},
+	}
+
+	// Получаем User ID из authData
+	// Примечание: в текущей реализации userID хранится в authData (возможно потребуется добавить)
+	// Для простоты используем username как userID
+	userID := authData.Username
+
+	// Генерируем nodeID (уникальный ID клиента)
+	// В реальном приложении это должен быть постоянный ID, сохраненный в БД
+	nodeID := fmt.Sprintf("%s-client", authData.Username)
+
+	// Создаем data service
+	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+
+	// Добавляем credential
+	if err := dataService.AddCredential(ctx, userID, cred); err != nil {
+		return fmt.Errorf("failed to add credential: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ Credential added successfully!")
+	fmt.Printf("Name: %s\n", name)
+	fmt.Printf("Login: %s\n", login)
+	fmt.Println()
+	fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server (not implemented yet).")
+
+	return nil
 }

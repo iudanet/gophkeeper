@@ -76,6 +76,16 @@ func (c *Client) Logout(ctx context.Context, accessToken string) error {
 	return c.doAuthRequest(ctx, "POST", "/api/v1/auth/logout", accessToken, nil, nil)
 }
 
+// Sync выполняет синхронизацию данных с сервером
+func (c *Client) Sync(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
+	var resp api.SyncResponse
+	err := c.doAuthRequest(ctx, "POST", "/api/v1/sync", accessToken, req, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("sync request failed: %w", err)
+	}
+	return &resp, nil
+}
+
 // doAuthRequest выполняет HTTP запрос с авторизацией
 func (c *Client) doAuthRequest(ctx context.Context, method, path, token string, body, result interface{}) error {
 	url := c.baseURL + path
