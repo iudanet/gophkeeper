@@ -9,7 +9,7 @@
 
 ## Статус проекта (на 2025-10-15)
 
-### Завершено (8 фаз):
+### Завершено (9 фаз):
 - Инициализация, модели данных, валидация
 - Криптография, SQLite storage (80.3% coverage)
 - CRDT (94.7% coverage)
@@ -18,11 +18,12 @@
 - **✅ Client Auth Storage с шифрованием (store_test.go ~90% coverage)**
 - **✅ Client CLI: register, login, logout, status команды**
 - **✅ Server Auth Handlers тесты (82.5% coverage)**
+- **✅ Client CRDT Storage + Data Service + CLI data commands (add, list, get, delete)**
 
 ### Частично (3 фазы):
 - API (~70%) — ✅ auth handlers с тестами, sync endpoints готовы
 - Сервер (~50%) — отсутствует TLS, частично middleware, ✅ auth handlers с тестами
-- Клиент (~40%) — ✅ register/login/logout с шифрованием токенов, ❌ без данных и sync
+- Клиент (~65%) — ✅ register/login/logout с шифрованием токенов, ✅ CRDT storage + data service, ✅ CLI: add/list/get/delete для credentials, ❌ sync logic, ❌ text/binary/card types
 
 ### Не начато (4+ фаз):
 - Тестирование, документация, CI/CD, Docker, TLS конфигурация, client sync и др.
@@ -30,8 +31,9 @@
 ### Критические проблемы:
 - Отсутствует TLS (HTTPS)
 - Middleware: нет rate limiting, логирования, recovery
-- Клиентская синхронизация и управление данными не реализованы полностью
-- Низкий coverage для client модулей (api, storage/boltdb)
+- Клиентская синхронизация с сервером не реализована
+- Низкий coverage для client модулей (api, storage/boltdb, data service)
+- Реализован только тип данных credential (нужны: text, binary, card)
 
 ---
 
@@ -46,6 +48,11 @@
 - **✅ Токены шифруются AES-256-GCM перед сохранением в BoltDB**
 - **✅ Тесты для auth.AuthService с полным циклом шифрования-дешифрования**
 - **✅ Comprehensive тесты для всех auth handlers: Register, GetSalt, Login, Refresh, Logout**
+- **✅ Client CRDT Storage (BoltDB) — 337 строк, 9 методов для CRDT операций**
+- **✅ Client Data Service — 158 строк, шифрование/дешифрование данных, CRDT metadata**
+- **✅ CLI data commands: add credential, list credentials, get credential, delete credential**
+- **✅ Zero-knowledge архитектура: master password → Argon2id → encryption_key (не хранится)**
+- **✅ Soft delete для CRDT sync: DeleteEntry помечает записи, не удаляет физически**
 
 ---
 
@@ -58,14 +65,19 @@
 2. **TLS конфигурация для сервера и клиента** (Let's Encrypt)
 3. **Client-side**:
    - Полная реализация sync logic (fetch, merge, push)
-   - CLI команды управления данными: add, list, get, update, delete, sync
+   - ✅ ~~CLI команды управления credentials: add, list, get, delete~~ (ЗАВЕРШЕНО)
+   - CLI команды для других типов данных: text, binary, card
+   - CLI команда sync для синхронизации с сервером
    - Автоматическое обновление access token (refresh)
    - ✅ ~~Хранение токенов в BoltDB с шифрованием~~ (ЗАВЕРШЕНО)
+   - ✅ ~~CRDT Storage (BoltDB) с 9 методами~~ (ЗАВЕРШЕНО)
+   - ✅ ~~Data Service с шифрованием данных~~ (ЗАВЕРШЕНО)
 4. **Расширение тестового покрытия клиентских модулей** (>80%)
    - ✅ auth.AuthService тесты завершены (~90% coverage)
    - ✅ server auth handlers тесты завершены (82.5% coverage)
    - ❌ client/api тесты отсутствуют
-   - ❌ client/storage/boltdb тесты отсутствуют
+   - ❌ client/storage/boltdb тесты отсутствуют (crdt.go 337 строк без тестов)
+   - ❌ client/data тесты отсутствуют (service.go 158 строк без тестов)
 5. **Конфигурация через файлы/env (config.yaml, env vars)**
 6. **Документация** (README, API, USAGE, SECURITY)
 7. **CI/CD, Docker, Makefile доработка**
@@ -80,13 +92,15 @@
 | 1 | ✅ Покрыть тестами auth handlers | **Завершено** (82.5% coverage) |
 | 2 | Реализовать RateLimit, Logging, Recovery middleware | Не сделано |
 | 3 | Реализовать TLS (сервер + клиент) | Не сделано |
-| 4 | Разработать клиентскую sync логику и команды CLI для данных | Не сделано |
-| 5 | ✅ Реализовать client auth storage с шифрованием | **Завершено** (90% coverage) |
-| 6 | ✅ Добавить CLI команды: logout, status | **Завершено** |
-| 7 | Расширить тесты клиентской части (auth, api, storage) | Частично (auth ✅, api ❌, storage ❌) |
-| 8 | Обновить конфигурацию (env и config.yaml) | Частично |
-| 9 | Создать документацию и пример использования | Не сделано |
-| 10 | Настроить CI/CD, сборку, Docker | Не сделано |
+| 4 | ✅ Разработать CRDT Storage + Data Service для клиента | **Завершено** (495 строк, без тестов) |
+| 5 | ✅ Реализовать CLI команды для credentials (add/list/get/delete) | **Завершено** (~350 строк) |
+| 6 | Разработать клиентскую sync логику (fetch, merge, push) | Не сделано |
+| 7 | ✅ Реализовать client auth storage с шифрованием | **Завершено** (90% coverage) |
+| 8 | ✅ Добавить CLI команды: logout, status | **Завершено** |
+| 9 | Расширить тесты клиентской части (auth, api, storage, data) | Частично (auth ✅, api ❌, storage ❌, data ❌) |
+| 10 | Обновить конфигурацию (env и config.yaml) | Частично |
+| 11 | Создать документацию и пример использования | Не сделано |
+| 12 | Настроить CI/CD, сборку, Docker | Не сделано |
 
 ---
 

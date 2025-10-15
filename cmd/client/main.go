@@ -107,6 +107,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "delete":
+		if err := runDelete(ctx, args[1:], boltStorage); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -140,6 +145,7 @@ func printUsage() {
 	fmt.Println("  add credential     Add new credential (login/password)")
 	fmt.Println("  list credentials   List all saved credentials")
 	fmt.Println("  get <id>           Show full credential details including password")
+	fmt.Println("  delete <id>        Delete credential (soft delete)")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  gophkeeper register")
@@ -148,6 +154,7 @@ func printUsage() {
 	fmt.Println("  gophkeeper add credential")
 	fmt.Println("  gophkeeper list credentials")
 	fmt.Println("  gophkeeper get b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
+	fmt.Println("  gophkeeper delete b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
 	fmt.Println("  gophkeeper --server https://example.com login")
 }
 
@@ -633,6 +640,89 @@ func runGet(ctx context.Context, args []string, boltStorage *boltdb.Storage) err
 		fmt.Printf("Notes:    %s\n", cred.Notes)
 	}
 	fmt.Println()
+
+	return nil
+}
+
+func runDelete(ctx context.Context, args []string, boltStorage *boltdb.Storage) error {
+	// Проверяем наличие ID
+	if len(args) == 0 {
+		return fmt.Errorf("missing credential ID. Usage: gophkeeper delete <id>")
+	}
+
+	credentialID := args[0]
+
+	fmt.Println("=== Delete Credential ===")
+	fmt.Println()
+
+	// Проверяем авторизацию
+	authData, err := boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	// Запрашиваем master password для получения encryption_key
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Деривируем ключи
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+
+	// Генерируем nodeID
+	nodeID := fmt.Sprintf("%s-client", authData.Username)
+
+	// Создаем data service
+	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+
+	// Сначала получаем credential для показа информации
+	cred, err := dataService.GetCredential(ctx, credentialID)
+	if err != nil {
+		if err == storage.ErrEntryNotFound {
+			return fmt.Errorf("credential not found with ID: %s", credentialID)
+		}
+		return fmt.Errorf("failed to get credential: %w", err)
+	}
+
+	// Показываем информацию о credential который будет удален
+	fmt.Println()
+	fmt.Println("About to delete:")
+	fmt.Printf("  Name:  %s\n", cred.Name)
+	fmt.Printf("  Login: %s\n", cred.Login)
+	if cred.URL != "" {
+		fmt.Printf("  URL:   %s\n", cred.URL)
+	}
+	fmt.Println()
+
+	// Запрашиваем подтверждение
+	confirm, err := readInput("Are you sure you want to delete this credential? (yes/no): ")
+	if err != nil {
+		return fmt.Errorf("failed to read confirmation: %w", err)
+	}
+
+	if confirm != "yes" && confirm != "y" {
+		fmt.Println()
+		fmt.Println("Deletion cancelled.")
+		return nil
+	}
+
+	// Удаляем credential (soft delete)
+	if err := dataService.DeleteCredential(ctx, credentialID); err != nil {
+		return fmt.Errorf("failed to delete credential: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ Credential deleted successfully!")
+	fmt.Println()
+	fmt.Println("Note: This is a soft delete. The credential is marked as deleted locally.")
+	fmt.Println("      Run 'gophkeeper sync' to sync with server (not implemented yet).")
 
 	return nil
 }
