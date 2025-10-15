@@ -56,10 +56,11 @@
 3. ~~**Нет таблицы user_data**~~ ✅ **ИСПРАВЛЕНО!** Миграция создана и применена
 4. ~~**Нет DataRepository**~~ ✅ **ИСПРАВЛЕНО!** DataRepository реализован с CRDT conflict resolution
 5. ~~**Низкий coverage для storage**~~ ✅ **ИСПРАВЛЕНО!** internal/server/storage достиг 80.3% coverage
-6. **Нет синхронизации** - нужны sync endpoints и handlers для работы с данными
-7. **Низкий coverage для остальных модулей** - 5/9 модулей протестированы (handlers, jwt, client/* - 0%)
-8. **Нет TLS** - сервер работает по HTTP (требование: HTTPS)
-9. **Нет middleware** - Auth, RateLimit, Logging директория пустая
+6. ~~**Нет синхронизации**~~ ✅ **ИСПРАВЛЕНО!** Sync endpoints реализованы и протестированы (100% coverage)
+7. ~~**Нет middleware**~~ ⚠️ **ЧАСТИЧНО ИСПРАВЛЕНО!** AuthMiddleware реализован (100% coverage), нет RateLimit/Logging
+8. **Низкий coverage для handlers** - auth.go и health.go не покрыты тестами (23.7% общий coverage)
+9. **Нет TLS** - сервер работает по HTTP (требование: HTTPS)
+10. **Низкий coverage для client** - auth, api, storage модули не покрыты тестами (0%)
 
 ### 📈 Прогресс по coverage:
 | Модуль | Coverage | Требование | Статус |
@@ -68,8 +69,9 @@
 | internal/validation | 100% | 80%+ | ✅ Отлично |
 | **internal/crdt** | **94.7%** | **80%+** | **✅ Отлично** 🎉 |
 | **internal/server/storage** | **80.3%** | **80%+** | **✅ Отлично** 🎉 |
-| internal/server/handlers | 0% | 80%+ | ❌ Критично |
-| internal/server/jwt | 0% | 80%+ | ❌ Критично |
+| **internal/server/middleware** | **100%** | **80%+** | **✅ Отлично** 🎉 |
+| internal/server/handlers | 23.7% | 80%+ | ⚠️ Частично (sync.go покрыт полностью) |
+| internal/server/jwt | 0% | 80%+ | ❌ Удалён (заменён на golang-jwt/jwt/v5) |
 | internal/client/auth | 0% | 80%+ | ❌ Критично |
 | internal/client/api | 0% | 80%+ | ❌ Критично |
 | internal/client/storage | 0% | 80%+ | ❌ Критично |
@@ -80,11 +82,13 @@
 3. ~~**Миграция user_data таблицы**~~ ✅ **ЗАВЕРШЕНО!** - создана и применена при старте
 4. ~~**DataRepository интерфейс и реализация**~~ ✅ **ЗАВЕРШЕНО!** - реализован с CRDT conflict resolution
 5. ~~**Тесты для storage (Фаза 4)**~~ ✅ **ЗАВЕРШЕНО!** - 80.3% coverage достигнуто
-6. **Sync endpoints и handlers** (GET/POST /api/v1/sync) - ВЫСОКИЙ ПРИОРИТЕТ
-7. **Middleware** (Auth, RateLimit, Logging) - нужно для sync endpoints
-8. **Тесты для handlers и JWT** - покрыть 80%+
-9. TLS конфигурация
-10. CLI команды для работы с данными (add, list, get, update, delete, sync)
+6. ~~**Sync endpoints и handlers** (GET/POST /api/v1/sync)~~ ✅ **ЗАВЕРШЕНО!** - реализованы с 100% coverage
+7. ~~**AuthMiddleware**~~ ✅ **ЗАВЕРШЕНО!** - реализован с 100% coverage
+8. **Тесты для auth handlers** - покрыть auth.go тестами (Register, Login, GetSalt, Refresh, Logout)
+9. **Middleware** (RateLimit, Logging, Recovery) - для production readiness
+10. **Клиентская реализация sync** - внедрить sync логику на клиенте
+11. **CLI команды для работы с данными** (add, list, get, update, delete, sync)
+12. **TLS конфигурация** - HTTPS для production
 
 ---
 
@@ -343,23 +347,24 @@
 
 ## Фаза 6: API и протокол взаимодействия (REST) ⚠️ (частично)
 
-### 6.1 API типы и структуры (`pkg/api/`) ⚠️
+### 6.1 API типы и структуры (`pkg/api/`) ✅
 - [x] Request/Response структуры для auth endpoints ✅
 - [x] `RegisterRequest` (username, auth_key_hash, public_salt) ✅
 - [x] `LoginRequest` (username, auth_key_hash) ✅
 - [x] `TokenResponse` (access_token, refresh_token, expires_in) ✅
-- [ ] `SyncRequest` (entries []CRDTEntry) ❌
-- [ ] `SyncResponse` (entries []CRDTEntry, conflicts, current_timestamp) ❌
+- [x] `SyncRequest` (entries []CRDTEntry, since timestamp) ✅
+- [x] `SyncResponse` (entries []CRDTEntry, conflicts, current_timestamp) ✅
+- [x] `CRDTEntry` для API (с конвертацией в/из models.CRDTEntry) ✅
 - [x] Валидация и сериализация JSON ✅
 
-### 6.2 Эндпоинты API (REST) ⚠️
+### 6.2 Эндпоинты API (REST) ✅
 - [x] `POST /api/v1/auth/register` - регистрация пользователя ✅
 - [x] `GET /api/v1/auth/salt/{username}` - получение public_salt ✅
 - [x] `POST /api/v1/auth/login` - аутентификация, возврат токенов ✅
 - [x] `POST /api/v1/auth/refresh` - обновление access токена ✅
 - [x] `POST /api/v1/auth/logout` - удаление refresh токена ✅
-- [ ] `GET /api/v1/sync?since=<timestamp>` - pull изменений с сервера ❌
-- [ ] `POST /api/v1/sync` - push изменений на сервер ❌
+- [x] `GET /api/v1/sync?since=<timestamp>` - pull изменений с сервера ✅
+- [x] `POST /api/v1/sync` - push изменений на сервер ✅
 - [x] `GET /api/v1/health` - health check (для мониторинга) ✅
 
 ### 6.3 Документация API (опционально) ❌
@@ -398,8 +403,14 @@
 - [ ] **Тесты для всех handlers:** ❌
   - [ ] **Coverage: 0%** ❌ ❌ ❌
 
-### 7.2 Middleware (`internal/server/middleware/`) ❌ (директория пустая!)
-- [ ] `AuthMiddleware` - проверка JWT access token в header Authorization ❌
+### 7.2 Middleware (`internal/server/middleware/`) ⚠️ (частично)
+- [x] `AuthMiddleware` - проверка JWT access token в header Authorization ✅
+  - [x] Извлечение токена из "Bearer <token>" ✅
+  - [x] Валидация JWT токена ✅
+  - [x] Добавление user_id и username в контекст ✅
+  - [x] Проверка формата заголовка ✅
+  - [x] Обработка expired токенов ✅
+  - [x] **Тесты: 100% coverage** ✅ (6 test functions, 13 test cases)
 - [ ] `RateLimitMiddleware`: ❌
   - Login: 5 попыток / 15 минут ❌
   - Register: 3 попытки / 1 час ❌
@@ -407,7 +418,6 @@
 - [ ] `LoggingMiddleware` - логирование запросов (без sensitive данных) ❌
 - [ ] `RecoveryMiddleware` - обработка паник ❌
 - [ ] `CORSMiddleware` (если нужно для будущего web интерфейса) ❌
-- [ ] Тесты для middleware ❌
 
 ### 7.3 Клиентская аутентификация (`internal/client/auth/`) ⚠️
 - [x] Реализовано в `internal/client/auth/auth.go` ✅
@@ -427,41 +437,52 @@
 ### 8.1 HTTP сервер (`cmd/server/main.go`, `internal/server/`) ⚠️
 - [x] Настройка HTTP сервера с **net/http.ServeMux** (Go 1.22+) ✅
 - [ ] Настройка TLS (cert, key из конфигурации, поддержка Let's Encrypt) ❌
-- [x] Роутинг с методами: ⚠️
+- [x] Роутинг с методами: ✅
   ```
   POST   /api/v1/auth/register     ✅
   GET    /api/v1/auth/salt/:username  ✅ (использует {username})
   POST   /api/v1/auth/login        ✅
   POST   /api/v1/auth/refresh      ✅
   POST   /api/v1/auth/logout       ✅
-  GET    /api/v1/sync              ❌ НЕ РЕАЛИЗОВАНО
-  POST   /api/v1/sync              ❌ НЕ РЕАЛИЗОВАНО
+  GET    /api/v1/sync              ✅ (защищен AuthMiddleware)
+  POST   /api/v1/sync              ✅ (защищен AuthMiddleware)
   GET    /api/v1/health            ✅
   ```
-- [ ] Подключение middleware (в правильном порядке): ❌
+- [ ] Подключение middleware (в правильном порядке): ⚠️
   - [ ] Recovery ❌
   - [ ] Logging ❌
   - [ ] RateLimit ❌
-  - [ ] Auth (для защищенных endpoints) ❌
+  - [x] Auth (для защищенных endpoints) ✅ - используется для /api/v1/sync
 - [x] Graceful shutdown (context, signal handling) ✅
 - [ ] Конфигурация через config.yaml + env variables - только флаги ⚠️
 - [x] Структурированное логирование (slog) ✅
 
-### 8.2 Handlers для синхронизации (`internal/server/handlers/sync.go`) ❌
-- [ ] Handler `GetSync`: ❌
-  - Получение `since` timestamp из query params ❌
-  - Получение user_id из JWT ❌
-  - Получение всех entries пользователя после `since` ❌
-  - Возврат entries + current_timestamp ❌
-- [ ] Handler `PostSync`: ❌
-  - Получение entries из request body ❌
-  - Получение user_id из JWT ❌
-  - Для каждого entry: ❌
-    - Проверка существования в БД ❌
-    - Если существует - conflict resolution (CRDT merge) ❌
-    - Если не существует - insert ❌
-  - Возврат conflicts (если были) + synced count ❌
-- [ ] Тесты для sync handlers ❌
+### 8.2 Handlers для синхронизации (`internal/server/handlers/sync.go`) ✅
+- [x] Handler `GetSync`: ✅
+  - [x] Получение `since` timestamp из query params ✅
+  - [x] Получение user_id из JWT (через AuthMiddleware) ✅
+  - [x] Получение всех entries пользователя после `since` ✅
+  - [x] Возврат entries + current_timestamp ✅
+- [x] Handler `PostSync`: ✅
+  - [x] Получение entries из request body ✅
+  - [x] Получение user_id из JWT ✅
+  - [x] Для каждого entry: ✅
+    - [x] Проверка владельца (user_id match) ✅
+    - [x] Проверка существования в БД ✅
+    - [x] Если существует - conflict resolution (CRDT LWW) ✅
+    - [x] Если не существует - insert ✅
+  - [x] Возврат conflicts count + server entries ✅
+- [x] **Тесты для sync handlers:** ✅
+  - [x] TestSyncHandler_HandleSync_MethodNotAllowed ✅
+  - [x] TestSyncHandler_HandleSync_Unauthorized ✅
+  - [x] TestSyncHandler_HandleGetSync_Success (4 test cases) ✅
+  - [x] TestSyncHandler_HandleGetSync_InvalidSince ✅
+  - [x] TestSyncHandler_HandlePostSync_Success ✅
+  - [x] TestSyncHandler_HandlePostSync_Conflicts ✅
+  - [x] TestSyncHandler_HandlePostSync_UserIDMismatch ✅
+  - [x] TestSyncHandler_HandlePostSync_InvalidJSON ✅
+  - [x] TestSyncHandler_HandlePostSync_EmptyEntries ✅
+  - [x] **Coverage: sync.go полностью покрыт тестами** ✅
 
 ### 8.3 Конфигурация и deployment ⚠️
 - [ ] Создание config.yaml с параметрами: ⚠️
