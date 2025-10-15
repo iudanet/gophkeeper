@@ -129,11 +129,14 @@ func (m *mockTokenStorage) DeleteRefreshToken(ctx context.Context, token string)
 }
 
 func (m *mockTokenStorage) DeleteUserTokens(ctx context.Context, userID string) (int, error) {
+	if m.deleteError != nil {
+		return 0, m.deleteError
+	}
 	count := 0
 	for token, rt := range m.tokens {
 		if rt.UserID == userID {
 			delete(m.tokens, token)
-			m.deletedTokens = append(m.deletedTokens, token) // <--- добавлено
+			m.deletedTokens = append(m.deletedTokens, token)
 			count++
 		}
 	}
@@ -929,4 +932,157 @@ func TestAuthHandler_Logout_InvalidFormat(t *testing.T) {
 	handler.Logout(w, req)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAuthHandler_Refresh_GetUserByIDError(t *testing.T) {
+	logger := setupTestLogger()
+	userStorage := &mockUserStorage{
+		users:        make(map[string]*models.User),
+		getUserError: fmt.Errorf("db error"),
+	}
+	tokenStorage := &mockTokenStorage{
+		tokens: map[string]*models.RefreshToken{
+			"valid_token": {
+				Token:     "valid_token",
+				UserID:    "user123",
+				ExpiresAt: time.Now().Add(1 * time.Hour),
+				CreatedAt: time.Now(),
+			},
+		},
+	}
+	jwtConfig := JWTConfig{Secret: []byte("test-secret")}
+
+	handler := NewAuthHandler(logger, userStorage, tokenStorage, jwtConfig)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	req.Header.Set("Authorization", "Bearer valid_token")
+
+	w := httptest.NewRecorder()
+	handler.Refresh(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestAuthHandler_Refresh_DeleteOldTokenError(t *testing.T) {
+	logger := setupTestLogger()
+	userStorage := &mockUserStorage{
+		users: map[string]*models.User{
+			"user1": {ID: "user1", Username: "user1"},
+		},
+	}
+	tokenStorage := &mockTokenStorage{
+		tokens: map[string]*models.RefreshToken{
+			"valid_token": {
+				Token:     "valid_token",
+				UserID:    "user1",
+				ExpiresAt: time.Now().Add(1 * time.Hour),
+				CreatedAt: time.Now(),
+			},
+		},
+		deleteError: fmt.Errorf("delete error"),
+	}
+	jwtConfig := JWTConfig{
+		Secret:          []byte("test-secret"),
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+
+	handler := NewAuthHandler(logger, userStorage, tokenStorage, jwtConfig)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	req.Header.Set("Authorization", "Bearer valid_token")
+
+	w := httptest.NewRecorder()
+	handler.Refresh(w, req)
+
+	// Должно успешно завершиться несмотря на ошибку удаления старого токена
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAuthHandler_Refresh_MissingAuthHeader(t *testing.T) {
+	logger := setupTestLogger()
+	userStorage := &mockUserStorage{users: make(map[string]*models.User)}
+	tokenStorage := &mockTokenStorage{tokens: make(map[string]*models.RefreshToken)}
+	jwtConfig := JWTConfig{Secret: []byte("test-secret")}
+
+	handler := NewAuthHandler(logger, userStorage, tokenStorage, jwtConfig)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	// Отсутствует Authorization header
+
+	w := httptest.NewRecorder()
+	handler.Refresh(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAuthHandler_Refresh_InvalidAuthHeaderFormat(t *testing.T) {
+	logger := setupTestLogger()
+	userStorage := &mockUserStorage{users: make(map[string]*models.User)}
+	tokenStorage := &mockTokenStorage{tokens: make(map[string]*models.RefreshToken)}
+	jwtConfig := JWTConfig{Secret: []byte("test-secret")}
+
+	handler := NewAuthHandler(logger, userStorage, tokenStorage, jwtConfig)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	req.Header.Set("Authorization", "InvalidFormat token123")
+
+	w := httptest.NewRecorder()
+	handler.Refresh(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAuthHandler_Logout_InvalidAccessToken(t *testing.T) {
+	logger := setupTestLogger()
+	userStorage := &mockUserStorage{users: make(map[string]*models.User)}
+	tokenStorage := &mockTokenStorage{tokens: make(map[string]*models.RefreshToken)}
+	jwtConfig := JWTConfig{Secret: []byte("test-secret")}
+
+	handler := NewAuthHandler(logger, userStorage, tokenStorage, jwtConfig)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token-format")
+
+	w := httptest.NewRecorder()
+	handler.Logout(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAuthHandler_Logout_DeleteUserTokensError(t *testing.T) {
+	logger := setupTestLogger()
+	userStorage := &mockUserStorage{
+		users: map[string]*models.User{
+			"testuser": {
+				ID:          "user123",
+				Username:    "testuser",
+				AuthKeyHash: "hash123",
+				PublicSalt:  "salt123",
+			},
+		},
+	}
+	tokenStorage := &mockTokenStorage{
+		tokens:      make(map[string]*models.RefreshToken),
+		deleteError: fmt.Errorf("delete error"),
+	}
+	jwtConfig := JWTConfig{
+		Secret:          []byte("test-secret"),
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+
+	handler := NewAuthHandler(logger, userStorage, tokenStorage, jwtConfig)
+
+	// Генерируем валидный access token
+	accessToken, _, err := GenerateAccessToken(jwtConfig, "user123", "testuser")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	w := httptest.NewRecorder()
+	handler.Logout(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }

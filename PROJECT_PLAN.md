@@ -9,7 +9,7 @@
 
 ## Статус проекта (на 2025-10-15)
 
-### Завершено (7 фаз):
+### Завершено (8 фаз):
 - Инициализация, модели данных, валидация
 - Криптография, SQLite storage (80.3% coverage)
 - CRDT (94.7% coverage)
@@ -17,21 +17,21 @@
 - AuthMiddleware (100% coverage)
 - **✅ Client Auth Storage с шифрованием (store_test.go ~90% coverage)**
 - **✅ Client CLI: register, login, logout, status команды**
+- **✅ Server Auth Handlers тесты (82.5% coverage)**
 
-### Частично (4 фазы):
-- API (~60%) — auth работающего, sync не до конца
-- Аутентификация (~50%) — handlers есть, middleware не хватает, 0% coverage на handlers
-- Сервер (~40%) — отсутствует TLS, частично middleware
+### Частично (3 фазы):
+- API (~70%) — ✅ auth handlers с тестами, sync endpoints готовы
+- Сервер (~50%) — отсутствует TLS, частично middleware, ✅ auth handlers с тестами
 - Клиент (~40%) — ✅ register/login/logout с шифрованием токенов, ❌ без данных и sync
 
 ### Не начато (4+ фаз):
 - Тестирование, документация, CI/CD, Docker, TLS конфигурация, client sync и др.
 
 ### Критические проблемы:
-- Низкий coverage для auth handlers и client модулей (auth, api, storage)
 - Отсутствует TLS (HTTPS)
 - Middleware: нет rate limiting, логирования, recovery
 - Клиентская синхронизация и управление данными не реализованы полностью
+- Низкий coverage для client модулей (api, storage/boltdb)
 
 ---
 
@@ -40,33 +40,36 @@
 - Полные тесты sync handlers
 - Полная валидация username, модели данных, криптоядро
 - SQLite storage с миграциями, WAL mode и MaxOpenConns=1 (требует проверки)
-- JWT + refresh tokens реализованы (но без тестов handlers)
+- **✅ JWT + refresh tokens реализованы с полными тестами (82.5% coverage)**
 - **✅ CLI команды: register, login, logout, status**
 - **✅ Client auth архитектура с тремя слоями: CLI → Service (API) → AuthService (crypto) → Storage (BoltDB)**
 - **✅ Токены шифруются AES-256-GCM перед сохранением в BoltDB**
 - **✅ Тесты для auth.AuthService с полным циклом шифрования-дешифрования**
+- **✅ Comprehensive тесты для всех auth handlers: Register, GetSalt, Login, Refresh, Logout**
 
 ---
 
 ## Основные оставшиеся задачи (приоритет)
 
-1. **Тесты для auth handlers** (Register, Login, GetSalt, Refresh, Logout) — покрытие 0%
-2. **Middleware**:
+1. **Middleware**:
    - RateLimit (login, register, getSalt)
    - Logging (без sensitive)
    - Recovery
-3. **TLS конфигурация для сервера и клиента** (Let's Encrypt)
-4. **Client-side**:
+2. **TLS конфигурация для сервера и клиента** (Let's Encrypt)
+3. **Client-side**:
    - Полная реализация sync logic (fetch, merge, push)
    - CLI команды управления данными: add, list, get, update, delete, sync
    - Автоматическое обновление access token (refresh)
    - ✅ ~~Хранение токенов в BoltDB с шифрованием~~ (ЗАВЕРШЕНО)
-5. **Расширение тестового покрытия клиентских и серверных модулей** (>80%)
+4. **Расширение тестового покрытия клиентских модулей** (>80%)
    - ✅ auth.AuthService тесты завершены (~90% coverage)
-6. **Конфигурация через файлы/env (config.yaml, env vars)**
-7. **Документация** (README, API, USAGE, SECURITY)
-8. **CI/CD, Docker, Makefile доработка**
-9. **Дополнительные middleware и производительность**
+   - ✅ server auth handlers тесты завершены (82.5% coverage)
+   - ❌ client/api тесты отсутствуют
+   - ❌ client/storage/boltdb тесты отсутствуют
+5. **Конфигурация через файлы/env (config.yaml, env vars)**
+6. **Документация** (README, API, USAGE, SECURITY)
+7. **CI/CD, Docker, Makefile доработка**
+8. **Дополнительные middleware и производительность**
 
 ---
 
@@ -74,13 +77,13 @@
 
 | Шаг | Описание | Статус |
 |------|-----------|--------|
-| 1 | Покрыть тестами auth handlers | Не сделано (0%) |
+| 1 | ✅ Покрыть тестами auth handlers | **Завершено** (82.5% coverage) |
 | 2 | Реализовать RateLimit, Logging, Recovery middleware | Не сделано |
 | 3 | Реализовать TLS (сервер + клиент) | Не сделано |
 | 4 | Разработать клиентскую sync логику и команды CLI для данных | Не сделано |
 | 5 | ✅ Реализовать client auth storage с шифрованием | **Завершено** (90% coverage) |
 | 6 | ✅ Добавить CLI команды: logout, status | **Завершено** |
-| 7 | Расширить тесты клиентской части (auth, api, storage) | Частично (auth ✅) |
+| 7 | Расширить тесты клиентской части (auth, api, storage) | Частично (auth ✅, api ❌, storage ❌) |
 | 8 | Обновить конфигурацию (env и config.yaml) | Частично |
 | 9 | Создать документацию и пример использования | Не сделано |
 | 10 | Настроить CI/CD, сборку, Docker | Не сделано |
