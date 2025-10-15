@@ -97,6 +97,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "list":
+		if err := runList(ctx, args[1:], boltStorage); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "get":
+		if err := runGet(ctx, args[1:], boltStorage); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -128,12 +138,16 @@ func printUsage() {
 	fmt.Println("  logout             Logout from server")
 	fmt.Println("  status             Show authentication status")
 	fmt.Println("  add credential     Add new credential (login/password)")
+	fmt.Println("  list credentials   List all saved credentials")
+	fmt.Println("  get <id>           Show full credential details including password")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  gophkeeper register")
 	fmt.Println("  gophkeeper login")
 	fmt.Println("  gophkeeper logout")
 	fmt.Println("  gophkeeper add credential")
+	fmt.Println("  gophkeeper list credentials")
+	fmt.Println("  gophkeeper get b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
 	fmt.Println("  gophkeeper --server https://example.com login")
 }
 
@@ -469,6 +483,156 @@ func runAddCredential(ctx context.Context, boltStorage *boltdb.Storage) error {
 	fmt.Printf("Login: %s\n", login)
 	fmt.Println()
 	fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server (not implemented yet).")
+
+	return nil
+}
+
+func runList(ctx context.Context, args []string, boltStorage *boltdb.Storage) error {
+	// Проверяем подкоманду
+	if len(args) == 0 {
+		return fmt.Errorf("missing data type. Usage: gophkeeper list <credentials|text|binary|card>")
+	}
+
+	dataType := args[0]
+
+	switch dataType {
+	case "credentials", "credential":
+		return runListCredentials(ctx, boltStorage)
+	case "text":
+		return fmt.Errorf("'list text' not implemented yet")
+	case "binary":
+		return fmt.Errorf("'list binary' not implemented yet")
+	case "card", "cards":
+		return fmt.Errorf("'list cards' not implemented yet")
+	default:
+		return fmt.Errorf("unknown data type: %s. Use: credentials, text, binary, or card", dataType)
+	}
+}
+
+func runListCredentials(ctx context.Context, boltStorage *boltdb.Storage) error {
+	fmt.Println("=== Saved Credentials ===")
+	fmt.Println()
+
+	// Проверяем авторизацию
+	authData, err := boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	// Запрашиваем master password для получения encryption_key
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Деривируем ключи
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+
+	// Генерируем nodeID
+	nodeID := fmt.Sprintf("%s-client", authData.Username)
+
+	// Создаем data service
+	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+
+	// Получаем список credentials
+	credentials, err := dataService.ListCredentials(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list credentials: %w", err)
+	}
+
+	if len(credentials) == 0 {
+		fmt.Println("No credentials found.")
+		fmt.Println()
+		fmt.Println("Use 'gophkeeper add credential' to add your first credential.")
+		return nil
+	}
+
+	fmt.Printf("Found %d credential(s):\n", len(credentials))
+	fmt.Println()
+
+	for i, cred := range credentials {
+		fmt.Printf("%d. %s\n", i+1, cred.Name)
+		fmt.Printf("   ID:    %s\n", cred.ID)
+		fmt.Printf("   Login: %s\n", cred.Login)
+		if cred.URL != "" {
+			fmt.Printf("   URL:   %s\n", cred.URL)
+		}
+		if cred.Notes != "" {
+			fmt.Printf("   Notes: %s\n", cred.Notes)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("Note: Passwords are hidden for security. Use 'gophkeeper get <id>' to view full details.")
+
+	return nil
+}
+
+func runGet(ctx context.Context, args []string, boltStorage *boltdb.Storage) error {
+	// Проверяем наличие ID
+	if len(args) == 0 {
+		return fmt.Errorf("missing credential ID. Usage: gophkeeper get <id>")
+	}
+
+	credentialID := args[0]
+
+	fmt.Println("=== Credential Details ===")
+	fmt.Println()
+
+	// Проверяем авторизацию
+	authData, err := boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	// Запрашиваем master password для получения encryption_key
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Деривируем ключи
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+
+	// Генерируем nodeID
+	nodeID := fmt.Sprintf("%s-client", authData.Username)
+
+	// Создаем data service
+	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+
+	// Получаем credential
+	cred, err := dataService.GetCredential(ctx, credentialID)
+	if err != nil {
+		if err == storage.ErrEntryNotFound {
+			return fmt.Errorf("credential not found with ID: %s", credentialID)
+		}
+		return fmt.Errorf("failed to get credential: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Printf("Name:     %s\n", cred.Name)
+	fmt.Printf("ID:       %s\n", cred.ID)
+	fmt.Printf("Login:    %s\n", cred.Login)
+	fmt.Printf("Password: %s\n", cred.Password)
+	if cred.URL != "" {
+		fmt.Printf("URL:      %s\n", cred.URL)
+	}
+	if cred.Notes != "" {
+		fmt.Printf("Notes:    %s\n", cred.Notes)
+	}
+	fmt.Println()
 
 	return nil
 }
