@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/iudanet/gophkeeper/internal/models"
@@ -29,7 +30,7 @@ func (s *Storage) CreateUser(ctx context.Context, user *models.User) error {
 
 	if err != nil {
 		// Проверяем на duplicate username
-		if err.Error() == "UNIQUE constraint failed: users.username" {
+		if isUniqueConstraintError(err, "users.username") {
 			return storage.ErrUserAlreadyExists
 		}
 		return fmt.Errorf("failed to insert user: %w", err)
@@ -178,4 +179,13 @@ func (s *Storage) UpdateLastLogin(ctx context.Context, userID string, lastLogin 
 	}
 
 	return nil
+}
+
+// isUniqueConstraintError checks if the error is a UNIQUE constraint violation for the specified field
+func isUniqueConstraintError(err error, field string) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "UNIQUE constraint failed") && strings.Contains(errMsg, field)
 }
