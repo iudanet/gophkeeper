@@ -18,6 +18,7 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
+	"github.com/iudanet/gophkeeper/internal/client/sync"
 	"github.com/iudanet/gophkeeper/internal/crypto"
 	"github.com/iudanet/gophkeeper/internal/models"
 )
@@ -112,6 +113,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "sync":
+		if err := runSync(ctx, apiClient, boltStorage); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -146,6 +152,7 @@ func printUsage() {
 	fmt.Println("  list credentials   List all saved credentials")
 	fmt.Println("  get <id>           Show full credential details including password")
 	fmt.Println("  delete <id>        Delete credential (soft delete)")
+	fmt.Println("  sync               Synchronize local data with server")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  gophkeeper register")
@@ -155,6 +162,7 @@ func printUsage() {
 	fmt.Println("  gophkeeper list credentials")
 	fmt.Println("  gophkeeper get b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
 	fmt.Println("  gophkeeper delete b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
+	fmt.Println("  gophkeeper sync")
 	fmt.Println("  gophkeeper --server https://example.com login")
 }
 
@@ -489,7 +497,7 @@ func runAddCredential(ctx context.Context, boltStorage *boltdb.Storage) error {
 	fmt.Printf("Name: %s\n", name)
 	fmt.Printf("Login: %s\n", login)
 	fmt.Println()
-	fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server (not implemented yet).")
+	fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server.")
 
 	return nil
 }
@@ -722,7 +730,85 @@ func runDelete(ctx context.Context, args []string, boltStorage *boltdb.Storage) 
 	fmt.Println("✓ Credential deleted successfully!")
 	fmt.Println()
 	fmt.Println("Note: This is a soft delete. The credential is marked as deleted locally.")
-	fmt.Println("      Run 'gophkeeper sync' to sync with server (not implemented yet).")
+	fmt.Println("      Run 'gophkeeper sync' to sync with server.")
+
+	return nil
+}
+
+func runSync(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.Storage) error {
+	fmt.Println("=== Synchronization ===")
+	fmt.Println()
+
+	// Проверяем авторизацию
+	authData, err := boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	// Запрашиваем master password для получения encryption_key
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Деривируем ключи
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+
+	// Получаем access token (расшифровываем)
+	authStore := auth.NewAuthService(boltStorage, keys.EncryptionKey)
+	authDataDecrypted, err := authStore.GetAuth(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+	accessToken := authDataDecrypted.AccessToken
+
+	// Проверяем что токен не истек
+	expiresAt := time.Unix(authData.ExpiresAt, 0)
+	if time.Now().After(expiresAt) {
+		return fmt.Errorf("access token has expired. Please login again")
+	}
+
+	fmt.Println()
+	fmt.Println("Starting synchronization with server...")
+
+	// Создаем logger
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	// Создаем sync service (передаем boltStorage как metadata storage тоже)
+	syncService := sync.NewService(apiClient, boltStorage, boltStorage, logger)
+
+	// Получаем userID (используем username как userID)
+	userID := authData.Username
+
+	// Выполняем синхронизацию
+	result, err := syncService.Sync(ctx, userID, accessToken)
+	if err != nil {
+		return fmt.Errorf("synchronization failed: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ Synchronization completed successfully!")
+	fmt.Println()
+	fmt.Printf("Pushed to server:   %d entries\n", result.PushedEntries)
+	fmt.Printf("Pulled from server: %d entries\n", result.PulledEntries)
+	fmt.Printf("Merged locally:     %d entries\n", result.MergedEntries)
+	if result.Conflicts > 0 {
+		fmt.Printf("Conflicts resolved: %d\n", result.Conflicts)
+	}
+	if result.SkippedEntries > 0 {
+		fmt.Printf("Skipped (errors):   %d\n", result.SkippedEntries)
+	}
+
+	fmt.Println()
+	fmt.Println("Your data is now synchronized with the server.")
 
 	return nil
 }

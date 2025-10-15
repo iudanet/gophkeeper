@@ -9,8 +9,9 @@ import (
 
 var (
 	// BoltDB bucket names
-	bucketAuth    = []byte("auth")
-	bucketSecrets = []byte("secrets")
+	bucketAuth     = []byte("auth")
+	bucketSecrets  = []byte("secrets")
+	bucketMetadata = []byte("metadata")
 )
 
 // Storage represents BoltDB storage implementation for client
@@ -59,6 +60,11 @@ func (s *Storage) initBuckets() error {
 		// Создаем bucket для секретов
 		if _, err := tx.CreateBucketIfNotExists(bucketSecrets); err != nil {
 			return fmt.Errorf("failed to create secrets bucket: %w", err)
+		}
+
+		// Создаем bucket для метаданных
+		if _, err := tx.CreateBucketIfNotExists(bucketMetadata); err != nil {
+			return fmt.Errorf("failed to create metadata bucket: %w", err)
 		}
 
 		return nil
