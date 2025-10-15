@@ -60,6 +60,7 @@ func main() {
 
 	// Инициализация storage
 	ctx := context.Background()
+	// TODO возвращать интерфейс
 	storage, err := sqlite.New(ctx, *dbPath)
 	if err != nil {
 		logger.Error("Failed to initialize storage", slog.Any("error", err))

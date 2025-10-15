@@ -23,7 +23,7 @@ func AuthMiddleware(logger *slog.Logger, jwtConfig handlers.JWTConfig) func(http
 
 			// Ожидаем формат: "Bearer <token>"
 			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || parts[0] != "Bearer" {
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
 				logger.Warn("Invalid Authorization header format", "header", authHeader)
 				http.Error(w, "Unauthorized: invalid token format", http.StatusUnauthorized)
 				return
