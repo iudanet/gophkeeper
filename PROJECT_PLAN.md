@@ -23,7 +23,7 @@
 ### Частично (3 фазы):
 - API (~70%) — ✅ auth handlers с тестами, sync endpoints готовы
 - Сервер (~50%) — отсутствует TLS, частично middleware, ✅ auth handlers с тестами
-- Клиент (~65%) — ✅ register/login/logout с шифрованием токенов, ✅ CRDT storage + data service, ✅ CLI: add/list/get/delete для credentials, ❌ sync logic, ❌ text/binary/card types
+- Клиент (~75%) — ✅ register/login/logout с шифрованием токенов, ✅ CRDT storage с тестами, ✅ data service с тестами, ✅ CLI: add/list/get/delete для credentials, ❌ sync logic, ❌ text/binary/card types, ❌ client/api тесты
 
 ### Не начато (4+ фаз):
 - Тестирование, документация, CI/CD, Docker, TLS конфигурация, client sync и др.
@@ -32,7 +32,7 @@
 - Отсутствует TLS (HTTPS)
 - Middleware: нет rate limiting, логирования, recovery
 - Клиентская синхронизация с сервером не реализована
-- Низкий coverage для client модулей (api, storage/boltdb, data service)
+- Отсутствуют тесты для client/api модуля (storage/boltdb ✅, data service ✅ завершены)
 - Реализован только тип данных credential (нужны: text, binary, card)
 
 ---
@@ -49,7 +49,9 @@
 - **✅ Тесты для auth.AuthService с полным циклом шифрования-дешифрования**
 - **✅ Comprehensive тесты для всех auth handlers: Register, GetSalt, Login, Refresh, Logout**
 - **✅ Client CRDT Storage (BoltDB) — 337 строк, 9 методов для CRDT операций**
+- **✅ Client CRDT Storage тесты — comprehensive coverage для всех CRDT операций**
 - **✅ Client Data Service — 158 строк, шифрование/дешифрование данных, CRDT metadata**
+- **✅ Client Data Service тесты — 20+ тестов, покрывают все методы, шифрование, edge cases, ошибки**
 - **✅ CLI data commands: add credential, list credentials, get credential, delete credential**
 - **✅ Zero-knowledge архитектура: master password → Argon2id → encryption_key (не хранится)**
 - **✅ Soft delete для CRDT sync: DeleteEntry помечает записи, не удаляет физически**
@@ -76,8 +78,8 @@
    - ✅ auth.AuthService тесты завершены (~90% coverage)
    - ✅ server auth handlers тесты завершены (82.5% coverage)
    - ❌ client/api тесты отсутствуют
-   - ❌ client/storage/boltdb тесты отсутствуют (crdt.go 337 строк без тестов)
-   - ❌ client/data тесты отсутствуют (service.go 158 строк без тестов)
+   - ✅ client/storage/boltdb тесты завершены (crdt_test.go с comprehensive тестами)
+   - ✅ **client/data тесты завершены** (service_test.go с 20+ тестами: AddCredential, GetCredential, ListCredentials, DeleteCredential, шифрование/дешифрование, edge cases, ошибки)
 5. **Конфигурация через файлы/env (config.yaml, env vars)**
 6. **Документация** (README, API, USAGE, SECURITY)
 7. **CI/CD, Docker, Makefile доработка**
@@ -97,7 +99,7 @@
 | 6 | Разработать клиентскую sync логику (fetch, merge, push) | Не сделано |
 | 7 | ✅ Реализовать client auth storage с шифрованием | **Завершено** (90% coverage) |
 | 8 | ✅ Добавить CLI команды: logout, status | **Завершено** |
-| 9 | Расширить тесты клиентской части (auth, api, storage, data) | Частично (auth ✅, api ❌, storage ❌, data ❌) |
+| 9 | Расширить тесты клиентской части (auth, api, storage, data) | Частично (auth ✅, storage ✅, data ✅, api ❌) |
 | 10 | Обновить конфигурацию (env и config.yaml) | Частично |
 | 11 | Создать документацию и пример использования | Не сделано |
 | 12 | Настроить CI/CD, сборку, Docker | Не сделано |

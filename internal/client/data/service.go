@@ -16,8 +16,8 @@ import (
 // Service handles client-side data operations with encryption
 type Service struct {
 	crdtStorage   storage.CRDTStorage
+	nodeID        string
 	encryptionKey []byte
-	nodeID        string // Unique identifier for this client instance
 }
 
 // NewService creates a new data service

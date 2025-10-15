@@ -57,8 +57,8 @@ func createTestEntry(id, userID, nodeID string, timestamp int64, deleted bool) *
 
 func TestStorage_SaveEntry(t *testing.T) {
 	tests := []struct {
-		name    string
 		entry   *models.CRDTEntry
+		name    string
 		wantErr bool
 	}{
 		{
@@ -189,10 +189,10 @@ func TestStorage_GetEntry(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
+		wantErr   error
+		wantEntry *models.CRDTEntry
 		name      string
 		id        string
-		wantEntry *models.CRDTEntry
-		wantErr   error
 	}{
 		{
 			name:      "get existing entry 1",
@@ -304,9 +304,9 @@ func TestStorage_GetEntriesAfterTimestamp(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		wantIDs        []string
 		afterTimestamp int64
 		wantCount      int
-		wantIDs        []string
 	}{
 		{
 			name:           "get all after timestamp 0",
@@ -480,8 +480,8 @@ func TestStorage_GetEntriesByType(t *testing.T) {
 	tests := []struct {
 		name      string
 		dataType  string
-		wantCount int
 		wantIDs   []string
+		wantCount int
 	}{
 		{
 			name:      "get credentials (excluding deleted)",
