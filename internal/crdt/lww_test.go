@@ -1,6 +1,7 @@
 package crdt
 
 import (
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -390,10 +391,13 @@ func TestLWWSet_ConcurrentAdd(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < entriesPerGoroutine; j++ {
 				id := goroutineID*entriesPerGoroutine + j
+				idStr := strconv.Itoa(id)              // Преобразуем в читаемую строку с цифрами
+				nodeIDStr := strconv.Itoa(goroutineID) // Аналогично для nodeID
+
 				entry := createTestEntry(
-					string(rune(id)),
+					idStr,
 					"user1",
-					string(rune(goroutineID)),
+					nodeIDStr,
 					int64(id),
 					false,
 				)
