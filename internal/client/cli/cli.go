@@ -18,17 +18,20 @@ import (
 )
 
 type Cli struct {
-	apiClient   *api.Client
-	boltStorage *boltdb.Storage   // raw storage layer
-	authService *auth.AuthService // auth layer with encryption
-	dataService *data.Service     // data layer with encryption
-	authData    *storage.AuthData // cached auth data (with encrypted tokens in storage)
+	apiClient     *api.Client
+	authService   *auth.AuthService
+	dataService   *data.Service
+	authData      *storage.AuthData
+	boltStorage   *boltdb.Storage
+	encryptionKey []byte
 }
 
-func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
+func New(apiClient *api.Client, authService *auth.AuthService, boltStorage *boltdb.Storage) *Cli {
 	return &Cli{
 		apiClient:   apiClient,
+		authService: authService,
 		boltStorage: boltStorage,
+		dataService: data.NewService(boltStorage), // Создаем сразу, без key/nodeID
 	}
 }
 
@@ -38,15 +41,14 @@ func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
 // 3. Command-line parameter masterPassword
 // 4. Interactive prompt (fallback)
 func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPasswordFile string) error {
-	// Проверяем авторизацию (читаем через raw storage для получения username и salt)
-	authData, err := c.boltStorage.GetAuth(ctx)
+	// Получаем зашифрованные auth данные для получения username и public salt
+	encryptedAuthData, err := c.authService.GetAuthEncryptData(ctx)
 	if err != nil {
 		if err == storage.ErrAuthNotFound {
 			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
 		}
 		return fmt.Errorf("failed to get auth data: %w", err)
 	}
-	c.authData = authData
 
 	// Получаем master password из различных источников
 	password, err := c.getMasterPassword(masterPassword, masterPasswordFile)
@@ -54,16 +56,23 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPass
 		return fmt.Errorf("failed to get master password: %w", err)
 	}
 
-	// Деривируем ключи
-	keys, err := crypto.DeriveKeysFromBase64Salt(password, c.authData.Username, c.authData.PublicSalt)
+	// Деривируем ключи из master password + username + public salt
+	keys, err := crypto.DeriveKeysFromBase64Salt(password, encryptedAuthData.Username, encryptedAuthData.PublicSalt)
 	if err != nil {
 		return fmt.Errorf("failed to derive keys: %w", err)
 	}
 
-	// Инициализируем auth и data сервисы с encryption key
-	c.authService = auth.NewAuthService(c.boltStorage, keys.EncryptionKey)
-	c.dataService = data.NewService(c.boltStorage, keys.EncryptionKey, c.authData.NodeID)
+	// Сохраняем encryption key в памяти для текущей сессии
+	c.encryptionKey = keys.EncryptionKey
 
+	// Получаем расшифрованные auth данные
+	authData, err := c.authService.GetAuthDecryptData(ctx, c.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt auth data: %w", err)
+	}
+	c.authData = authData
+
+	// dataService уже создан в конструкторе, encryption key и nodeID передаются в методы
 	return nil
 }
 

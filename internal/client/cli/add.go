@@ -89,7 +89,7 @@ func (c *Cli) runAddCredential(ctx context.Context) error {
 	userID := c.authData.UserID
 
 	// Добавляем credential через data service
-	if err := c.dataService.AddCredential(ctx, userID, cred); err != nil {
+	if err := c.dataService.AddCredential(ctx, userID, c.authData.NodeID, c.encryptionKey, cred); err != nil {
 		return fmt.Errorf("failed to add credential: %w", err)
 	}
 
@@ -130,7 +130,7 @@ func (c *Cli) runAddText(ctx context.Context) error {
 
 	userID := c.authData.UserID
 
-	if err := c.dataService.AddTextData(ctx, userID, textData); err != nil {
+	if err := c.dataService.AddTextData(ctx, userID, c.authData.NodeID, c.encryptionKey, textData); err != nil {
 		return fmt.Errorf("failed to add text data: %w", err)
 	}
 
@@ -194,7 +194,7 @@ func (c *Cli) runAddCard(ctx context.Context) error {
 
 	userID := c.authData.UserID
 
-	if err := c.dataService.AddCardData(ctx, userID, cardData); err != nil {
+	if err := c.dataService.AddCardData(ctx, userID, c.authData.NodeID, c.encryptionKey, cardData); err != nil {
 		return fmt.Errorf("failed to add card: %w", err)
 	}
 
@@ -266,7 +266,7 @@ func (c *Cli) runAddBinary(ctx context.Context) error {
 
 	userID := c.authData.UserID
 
-	if err := c.dataService.AddBinaryData(ctx, userID, binaryData); err != nil {
+	if err := c.dataService.AddBinaryData(ctx, userID, c.authData.NodeID, c.encryptionKey, binaryData); err != nil {
 		return fmt.Errorf("failed to add binary data: %w", err)
 	}
 

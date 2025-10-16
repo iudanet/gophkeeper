@@ -17,25 +17,25 @@ func (c *Cli) runGet(ctx context.Context, args []string) error {
 	entryID := args[0]
 
 	// Пробуем получить как credential
-	cred, err := c.dataService.GetCredential(ctx, entryID)
+	cred, err := c.dataService.GetCredential(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayCredential(cred)
 	}
 
 	// Пробуем получить как text
-	text, err := c.dataService.GetTextData(ctx, entryID)
+	text, err := c.dataService.GetTextData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayTextData(text)
 	}
 
 	// Пробуем получить как binary
-	binary, err := c.dataService.GetBinaryData(ctx, entryID)
+	binary, err := c.dataService.GetBinaryData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayBinaryData(binary)
 	}
 
 	// Пробуем получить как card
-	card, err := c.dataService.GetCardData(ctx, entryID)
+	card, err := c.dataService.GetCardData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayCardData(card)
 	}

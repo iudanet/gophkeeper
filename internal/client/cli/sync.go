@@ -13,12 +13,12 @@ import (
 func (c *Cli) runSync(ctx context.Context) error {
 	fmt.Println("=== Synchronization ===")
 
-	// Получаем access token (расшифровываем)
-	authDataDecrypted, err := c.authService.GetAuth(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get auth data: %w", err)
+	// Используем уже расшифрованный access token из c.authData
+	// (он был расшифрован в ReadMasterPassword)
+	if c.authData == nil {
+		return fmt.Errorf("not authenticated or encryption key not available")
 	}
-	accessToken := authDataDecrypted.AccessToken
+	accessToken := c.authData.AccessToken
 
 	// Проверяем что токен не истек
 	expiresAt := time.Unix(c.authData.ExpiresAt, 0)
@@ -34,11 +34,11 @@ func (c *Cli) runSync(ctx context.Context) error {
 		Level: slog.LevelInfo,
 	}))
 
-	// Создаем sync service (передаем boltStorage как metadata storage тоже)
+	// Создаем sync service (boltStorage реализует и CRDTStorage, и MetadataStorage)
 	syncService := sync.NewService(c.apiClient, c.boltStorage, c.boltStorage, logger)
 
 	// Получаем userID (используем username как userID)
-	userID := c.authData.Username
+	userID := c.authData.UserID
 
 	// Выполняем синхронизацию
 	result, err := syncService.Sync(ctx, userID, accessToken)

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/iudanet/gophkeeper/internal/client/api"
+	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/cli"
 	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 )
@@ -59,7 +60,9 @@ func main() {
 
 	// Создаем API клиент
 	apiClient := api.NewClient(*serverURL)
-	commands := cli.New(apiClient, boltStorage)
+	authService := auth.NewAuthService(boltStorage)
+	// DataService создается позже, после получения encryption key
+	commands := cli.New(apiClient, authService, boltStorage)
 
 	// Получаем команду
 	command := args[0]

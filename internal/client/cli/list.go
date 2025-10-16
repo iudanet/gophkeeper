@@ -31,7 +31,7 @@ func (c *Cli) runListCredentials(ctx context.Context) error {
 	fmt.Println("=== Saved Credentials ===")
 
 	// Получаем список credentials через data service
-	credentials, err := c.dataService.ListCredentials(ctx)
+	credentials, err := c.dataService.ListCredentials(ctx, c.encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to list credentials: %w", err)
 	}
@@ -68,7 +68,7 @@ func (c *Cli) runListText(ctx context.Context) error {
 	fmt.Println("=== Saved Text Data ===")
 
 	// Получаем список text data через data service
-	textData, err := c.dataService.ListTextData(ctx)
+	textData, err := c.dataService.ListTextData(ctx, c.encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to list text data: %w", err)
 	}
@@ -104,7 +104,7 @@ func (c *Cli) runListBinary(ctx context.Context) error {
 	fmt.Println("=== Saved Binary Data ===")
 
 	// Получаем список binary data через data service
-	binaryData, err := c.dataService.ListBinaryData(ctx)
+	binaryData, err := c.dataService.ListBinaryData(ctx, c.encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to list binary data: %w", err)
 	}
@@ -141,7 +141,7 @@ func (c *Cli) runListCards(ctx context.Context) error {
 	fmt.Println("=== Saved Card Data ===")
 
 	// Получаем список card data через data service
-	cardData, err := c.dataService.ListCardData(ctx)
+	cardData, err := c.dataService.ListCardData(ctx, c.encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to list card data: %w", err)
 	}

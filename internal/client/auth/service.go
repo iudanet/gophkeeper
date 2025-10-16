@@ -17,10 +17,13 @@ import (
 // This layer is responsible for encrypting/decrypting tokens before saving to storage
 type AuthStore interface {
 	// SaveAuth encrypts and saves authentication data
-	SaveAuth(ctx context.Context, auth *storage.AuthData) error
+	SaveAuth(ctx context.Context, auth *storage.AuthData, encryptionKey []byte) error
 
-	// GetAuth retrieves and decrypts authentication data
-	GetAuth(ctx context.Context) (*storage.AuthData, error)
+	// GetAuthDecryptData retrieves and decrypts authentication data
+	GetAuthDecryptData(ctx context.Context, encryptionKey []byte) (*storage.AuthData, error)
+
+	// GetAuthEncryptData retrieves authentication data without decryption
+	GetAuthEncryptData(ctx context.Context) (*storage.AuthData, error)
 
 	// DeleteAuth removes stored authentication data
 	DeleteAuth(ctx context.Context) error
@@ -159,7 +162,7 @@ func (s *Service) Login(ctx context.Context, username, masterPassword string) (*
 	}
 
 	// 5. Получаем или генерируем NodeID
-	nodeID, err := s.getOrCreateNodeID(ctx)
+	nodeID, err := s.getOrCreateNodeID(ctx, keys.EncryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create node ID: %w", err)
 	}
@@ -179,9 +182,9 @@ func (s *Service) Login(ctx context.Context, username, masterPassword string) (*
 
 // Logout выполняет выход из системы
 // Удаляет локальные данные авторизации и опционально уведомляет сервер
-func (s *Service) Logout(ctx context.Context) error {
+func (s *Service) Logout(ctx context.Context, encryptionKey []byte) error {
 	// 1. Пытаемся получить текущий access token для отправки серверу
-	authData, err := s.authStore.GetAuth(ctx)
+	authData, err := s.authStore.GetAuthEncryptData(ctx)
 	if err != nil {
 		// Если данных нет, просто логируем и продолжаем
 		slog.Debug("no auth data found during logout", "error", err)
@@ -203,14 +206,14 @@ func (s *Service) Logout(ctx context.Context) error {
 
 // getOrCreateNodeID возвращает существующий NodeID или создает новый
 // NodeID должен быть уникальным для каждого физического клиента/устройства
-func (s *Service) getOrCreateNodeID(ctx context.Context) (string, error) {
+func (s *Service) getOrCreateNodeID(ctx context.Context, encryptionKey []byte) (string, error) {
 	// Если authStore не инициализирован (это первый login/register), создаем новый NodeID
 	if s.authStore == nil {
 		return uuid.New().String(), nil
 	}
 
 	// Проверяем есть ли уже сохраненный NodeID в auth data
-	authData, err := s.authStore.GetAuth(ctx)
+	authData, err := s.authStore.GetAuthEncryptData(ctx)
 	if err != nil {
 		// Если данных нет (первый login на этом устройстве), создаем новый NodeID
 		if err == storage.ErrAuthNotFound {

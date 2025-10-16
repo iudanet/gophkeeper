@@ -20,7 +20,7 @@ func (c *Cli) runLogin(ctx context.Context) error {
 	}
 
 	// Запрашиваем master password
-	masterPassword, err := readPassword("Master password: ")
+	pass, err := readPassword("Master password: ")
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
 	}
@@ -32,13 +32,10 @@ func (c *Cli) runLogin(ctx context.Context) error {
 	authService := auth.NewService(c.apiClient, nil)
 
 	// Логин
-	result, err := authService.Login(ctx, username, masterPassword)
+	result, err := authService.Login(ctx, username, pass)
 	if err != nil {
 		return err
 	}
-
-	// Теперь у нас есть encryption_key, создаем AuthService (слой шифрования)
-	authStore := auth.NewAuthService(c.boltStorage, result.EncryptionKey)
 
 	// Сохраняем токены через слой шифрования
 	authData := &storage.AuthData{
@@ -51,7 +48,7 @@ func (c *Cli) runLogin(ctx context.Context) error {
 		ExpiresAt:    time.Now().Unix() + result.ExpiresIn,
 	}
 
-	if err := authStore.SaveAuth(ctx, authData); err != nil {
+	if err := c.authService.SaveAuth(ctx, authData, result.EncryptionKey); err != nil {
 		return fmt.Errorf("failed to save auth data: %w", err)
 	}
 

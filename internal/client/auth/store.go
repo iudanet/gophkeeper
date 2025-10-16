@@ -13,8 +13,7 @@ import (
 // between business logic and storage. It encrypts tokens before saving
 // and decrypts them when retrieving.
 type AuthService struct {
-	storage       storage.AuthStorage
-	encryptionKey []byte // ключ шифрования, полученный из master password + username + salt
+	storage storage.AuthStorage
 }
 
 // Compile-time check that AuthService implements AuthStore
@@ -22,30 +21,26 @@ var _ AuthStore = (*AuthService)(nil)
 
 // NewAuthService creates a new AuthService with encryption layer
 // encryptionKey must be exactly 32 bytes (derived from master password)
-func NewAuthService(storage storage.AuthStorage, encryptionKey []byte) *AuthService {
-	if len(encryptionKey) != 32 {
-		panic("encryptionKey must be 32 bytes")
-	}
+func NewAuthService(storage storage.AuthStorage) *AuthService {
 	return &AuthService{
-		storage:       storage,
-		encryptionKey: encryptionKey,
+		storage: storage,
 	}
 }
 
 // SaveAuth сохраняет незашифрованные auth данные,
 // сервис сам зашифрует токены и передаст в хранилище
-func (s *AuthService) SaveAuth(ctx context.Context, auth *storage.AuthData) error {
+func (s *AuthService) SaveAuth(ctx context.Context, auth *storage.AuthData, encryptionKey []byte) error {
 	if auth == nil {
 		return fmt.Errorf("auth data is nil")
 	}
 
 	// Шифруем токены
-	encryptedAccessToken, err := crypto.Encrypt([]byte(auth.AccessToken), s.encryptionKey)
+	encryptedAccessToken, err := crypto.Encrypt([]byte(auth.AccessToken), encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt access token: %w", err)
 	}
 
-	encryptedRefreshToken, err := crypto.Encrypt([]byte(auth.RefreshToken), s.encryptionKey)
+	encryptedRefreshToken, err := crypto.Encrypt([]byte(auth.RefreshToken), encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt refresh token: %w", err)
 	}
@@ -60,8 +55,8 @@ func (s *AuthService) SaveAuth(ctx context.Context, auth *storage.AuthData) erro
 	return s.storage.SaveAuth(ctx, &authCopy)
 }
 
-// GetAuth загружает данные из storage и расшифровывает токены
-func (s *AuthService) GetAuth(ctx context.Context) (*storage.AuthData, error) {
+// GetAuthDecryptData загружает данные из storage и расшифровывает токены
+func (s *AuthService) GetAuthDecryptData(ctx context.Context, encryptionKey []byte) (*storage.AuthData, error) {
 	storedAuth, err := s.storage.GetAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -78,11 +73,11 @@ func (s *AuthService) GetAuth(ctx context.Context) (*storage.AuthData, error) {
 	}
 
 	// Дешифруем
-	accessTokenBytes, err := crypto.Decrypt(encryptedAccessTokenBytes, s.encryptionKey)
+	accessTokenBytes, err := crypto.Decrypt(encryptedAccessTokenBytes, encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt access token: %w", err)
 	}
-	refreshTokenBytes, err := crypto.Decrypt(encryptedRefreshTokenBytes, s.encryptionKey)
+	refreshTokenBytes, err := crypto.Decrypt(encryptedRefreshTokenBytes, encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt refresh token: %w", err)
 	}
@@ -92,6 +87,19 @@ func (s *AuthService) GetAuth(ctx context.Context) (*storage.AuthData, error) {
 	auth.AccessToken = string(accessTokenBytes)
 	auth.RefreshToken = string(refreshTokenBytes)
 	auth.ExpiresAt = storedAuth.ExpiresAt
+
+	return &auth, nil
+}
+
+// GetAuthEncryptData загружает данные из storage и расшифровывает токены
+func (s *AuthService) GetAuthEncryptData(ctx context.Context) (*storage.AuthData, error) {
+	storedAuth, err := s.storage.GetAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Копируем все в новую структуру, возвращаем с расшифрованными токенами
+	auth := *storedAuth
 
 	return &auth, nil
 }

@@ -17,25 +17,25 @@ func (c *Cli) runDelete(ctx context.Context, args []string) error {
 
 	// Определяем тип entry и удаляем
 	// Пробуем как credential
-	cred, err := c.dataService.GetCredential(ctx, entryID)
+	cred, err := c.dataService.GetCredential(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.deleteCredential(ctx, entryID, cred)
 	}
 
 	// Пробуем как text
-	text, err := c.dataService.GetTextData(ctx, entryID)
+	text, err := c.dataService.GetTextData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.deleteTextData(ctx, entryID, text)
 	}
 
 	// Пробуем как binary
-	binary, err := c.dataService.GetBinaryData(ctx, entryID)
+	binary, err := c.dataService.GetBinaryData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.deleteBinaryData(ctx, entryID, binary)
 	}
 
 	// Пробуем как card
-	card, err := c.dataService.GetCardData(ctx, entryID)
+	card, err := c.dataService.GetCardData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.deleteCardData(ctx, entryID, card)
 	}
@@ -67,7 +67,7 @@ func (c *Cli) deleteCredential(ctx context.Context, id string, cred interface{})
 		return nil
 	}
 
-	if err := c.dataService.DeleteCredential(ctx, id); err != nil {
+	if err := c.dataService.DeleteCredential(ctx, id, c.authData.NodeID); err != nil {
 		return fmt.Errorf("failed to delete credential: %w", err)
 	}
 
@@ -104,7 +104,7 @@ func (c *Cli) deleteTextData(ctx context.Context, id string, text interface{}) e
 		return nil
 	}
 
-	if err := c.dataService.DeleteTextData(ctx, id); err != nil {
+	if err := c.dataService.DeleteTextData(ctx, id, c.authData.NodeID); err != nil {
 		return fmt.Errorf("failed to delete text data: %w", err)
 	}
 
@@ -140,7 +140,7 @@ func (c *Cli) deleteBinaryData(ctx context.Context, id string, binary interface{
 		return nil
 	}
 
-	if err := c.dataService.DeleteBinaryData(ctx, id); err != nil {
+	if err := c.dataService.DeleteBinaryData(ctx, id, c.authData.NodeID); err != nil {
 		return fmt.Errorf("failed to delete binary data: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func (c *Cli) deleteCardData(ctx context.Context, id string, card interface{}) e
 		return nil
 	}
 
-	if err := c.dataService.DeleteCardData(ctx, id); err != nil {
+	if err := c.dataService.DeleteCardData(ctx, id, c.authData.NodeID); err != nil {
 		return fmt.Errorf("failed to delete card data: %w", err)
 	}
 
