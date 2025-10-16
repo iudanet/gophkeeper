@@ -17,9 +17,12 @@ func TestGetMasterPassword_FromEnvVar(t *testing.T) {
 	defer func() {
 		require.NoError(t, os.Unsetenv("GOPHKEEPER_MASTER_PASSWORD"))
 	}()
-
+	passwords := Passwors{
+		FromFile: "",
+		FromArgs: "",
+	}
 	// Execute
-	password, err := cli.getMasterPassword("", "")
+	password, err := cli.getMasterPassword(passwords)
 
 	// Assert
 	require.NoError(t, err)
@@ -42,9 +45,12 @@ func TestGetMasterPassword_FromFile(t *testing.T) {
 	_, err = tmpfile.WriteString(testPassword + "\n")
 	require.NoError(t, err)
 	require.NoError(t, tmpfile.Close())
-
+	passwords := Passwors{
+		FromFile: tmpfile.Name(),
+		FromArgs: "",
+	}
 	// Execute
-	password, err := cli.getMasterPassword("", tmpfile.Name())
+	password, err := cli.getMasterPassword(passwords)
 
 	// Assert
 	require.NoError(t, err)
@@ -55,14 +61,16 @@ func TestGetMasterPassword_FromFile(t *testing.T) {
 func TestGetMasterPassword_FromCLIParam(t *testing.T) {
 	// Setup
 	cli := &Cli{}
-	testPassword := "test_cli_password_789"
-
+	pass := Passwors{
+		FromFile: "",
+		FromArgs: "test_cli_password_789",
+	}
 	// Execute
-	password, err := cli.getMasterPassword(testPassword, "")
+	password, err := cli.getMasterPassword(pass)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, testPassword, password)
+	assert.Equal(t, pass.FromArgs, password)
 }
 
 // TestGetMasterPassword_Priority проверяет приоритет источников
@@ -89,9 +97,12 @@ func TestGetMasterPassword_Priority(t *testing.T) {
 	defer func() {
 		require.NoError(t, os.Unsetenv("GOPHKEEPER_MASTER_PASSWORD"))
 	}()
-
+	pass := Passwors{
+		FromFile: tmpfile.Name(),
+		FromArgs: cliPassword,
+	}
 	// Execute - передаем все источники
-	password, err := cli.getMasterPassword(cliPassword, tmpfile.Name())
+	password, err := cli.getMasterPassword(pass)
 
 	// Assert - должен вернуться env var (наивысший приоритет)
 	require.NoError(t, err)
@@ -114,9 +125,12 @@ func TestGetMasterPassword_FileOverCLI(t *testing.T) {
 	_, err = tmpfile.WriteString(filePassword)
 	require.NoError(t, err)
 	require.NoError(t, tmpfile.Close())
-
+	pass := Passwors{
+		FromFile: tmpfile.Name(),
+		FromArgs: cliPassword,
+	}
 	// Execute - env var НЕ установлен, передаем файл и CLI
-	password, err := cli.getMasterPassword(cliPassword, tmpfile.Name())
+	password, err := cli.getMasterPassword(pass)
 
 	// Assert - должен вернуться файл (приоритет 2)
 	require.NoError(t, err)
@@ -135,9 +149,12 @@ func TestGetMasterPassword_EmptyFile(t *testing.T) {
 		require.NoError(t, os.Remove(tmpfile.Name()))
 	}()
 	require.NoError(t, tmpfile.Close())
-
+	pass := Passwors{
+		FromFile: tmpfile.Name(),
+		FromArgs: "",
+	}
 	// Execute
-	password, err := cli.getMasterPassword("", tmpfile.Name())
+	password, err := cli.getMasterPassword(pass)
 
 	// Assert - должна быть ошибка
 	require.Error(t, err)
@@ -149,9 +166,12 @@ func TestGetMasterPassword_EmptyFile(t *testing.T) {
 func TestGetMasterPassword_FileNotFound(t *testing.T) {
 	// Setup
 	cli := &Cli{}
-
+	pass := Passwors{
+		FromFile: "/nonexistent/file/path.txt",
+		FromArgs: "",
+	}
 	// Execute
-	password, err := cli.getMasterPassword("", "/nonexistent/file/path.txt")
+	password, err := cli.getMasterPassword(pass)
 
 	// Assert - должна быть ошибка
 	require.Error(t, err)
@@ -174,9 +194,12 @@ func TestGetMasterPassword_FileWithWhitespace(t *testing.T) {
 	_, err = tmpfile.WriteString("  " + testPassword + "  \n\n")
 	require.NoError(t, err)
 	require.NoError(t, tmpfile.Close())
-
+	pass := Passwors{
+		FromFile: tmpfile.Name(),
+		FromArgs: "",
+	}
 	// Execute
-	password, err := cli.getMasterPassword("", tmpfile.Name())
+	password, err := cli.getMasterPassword(pass)
 
 	// Assert - пробелы должны быть обрезаны
 	require.NoError(t, err)

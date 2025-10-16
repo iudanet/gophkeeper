@@ -31,7 +31,10 @@ func main() {
 	masterPasswordFile := flag.String("master-password-file", "", "Path to file containing master password")
 
 	flag.Parse()
-
+	pass := cli.Passwors{
+		FromFile: *masterPasswordFile,
+		FromArgs: *masterPassword,
+	}
 	// Show version and exit if requested
 	if *showVersion {
 		printVersion()
@@ -74,20 +77,11 @@ func main() {
 	// Создаем CLI с сервисами (без прямого доступа к storage)
 	commands := cli.New(apiClient, authService, dataService, syncService)
 
-	// // Получаем команду
-	// command := args[0]
-
-	// // Для register и login не нужен мастер-пароль (база ещё не создана)
-	// needMasterPassword := command != "register" && command != "login"
-
-	// if needMasterPassword {
-	// 	// Передаем параметры мастер-пароля
-	errPass := commands.ReadMasterPassword(ctx, *masterPassword, *masterPasswordFile)
+	errPass := commands.ReadMasterPassword(ctx, pass)
 	if errPass != nil {
 		fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
 		os.Exit(1)
 	}
-	// }
 
 	commands.Run(ctx, args)
 }

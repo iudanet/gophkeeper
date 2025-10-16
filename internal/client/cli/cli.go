@@ -18,6 +18,11 @@ import (
 	"golang.org/x/term"
 )
 
+type Passwors struct {
+	FromFile string
+	FromArgs string
+}
+
 type Cli struct {
 	apiClient     *api.Client
 	authService   *auth.AuthService
@@ -41,7 +46,7 @@ func New(apiClient *api.Client, authService *auth.AuthService, dataService *data
 // 2. File specified in masterPasswordFile parameter
 // 3. Command-line parameter masterPassword
 // 4. Interactive prompt (fallback)
-func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPasswordFile string) error {
+func (c *Cli) ReadMasterPassword(ctx context.Context, passwords Passwors) error {
 	// Получаем зашифрованные auth данные для получения username и public salt
 	encryptedAuthData, err := c.authService.GetAuthEncryptData(ctx)
 	if err != nil {
@@ -52,12 +57,12 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPass
 	}
 
 	// Получаем master password из различных источников
-	password, err := c.getMasterPassword(masterPassword, masterPasswordFile)
+	password, err := c.getMasterPassword(passwords)
 	if err != nil {
 		return fmt.Errorf("failed to get master password: %w", err)
 	}
 
-	if err := validation.ValidatePassword(masterPassword); err != nil {
+	if err := validation.ValidatePassword(password); err != nil {
 		return fmt.Errorf("invalid password: %w", err)
 	}
 	// Деривируем ключи из master password + username + public salt
@@ -88,15 +93,15 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPass
 // 2. File specified in masterPasswordFile parameter
 // 3. Command-line parameter masterPassword
 // 4. Interactive prompt (fallback)
-func (c *Cli) getMasterPassword(cliPassword, passwordFile string) (string, error) {
+func (c *Cli) getMasterPassword(passwords Passwors) (string, error) {
 	// Priority 1: Environment variable
 	if envPassword := os.Getenv("GOPHKEEPER_MASTER_PASSWORD"); envPassword != "" {
 		return envPassword, nil
 	}
 
 	// Priority 2: File
-	if passwordFile != "" {
-		content, err := os.ReadFile(passwordFile)
+	if passwords.FromFile != "" {
+		content, err := os.ReadFile(passwords.FromFile)
 		if err != nil {
 			return "", fmt.Errorf("failed to read password file: %w", err)
 		}
@@ -109,8 +114,8 @@ func (c *Cli) getMasterPassword(cliPassword, passwordFile string) (string, error
 	}
 
 	// Priority 3: CLI parameter
-	if cliPassword != "" {
-		return cliPassword, nil
+	if passwords.FromArgs != "" {
+		return passwords.FromArgs, nil
 	}
 
 	// Priority 4: Interactive prompt (fallback)
