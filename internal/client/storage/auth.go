@@ -30,6 +30,7 @@ type AuthStorage interface {
 type AuthData struct {
 	Username     string `json:"username"`
 	UserID       string `json:"user_id"`
+	NodeID       string `json:"node_id"` // Unique client/device identifier for CRDT
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	PublicSalt   string `json:"public_salt"`

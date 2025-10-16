@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 )
 
@@ -18,14 +17,8 @@ func (c *Cli) runGet(ctx context.Context, args []string) error {
 
 	fmt.Println("=== Credential Details ===")
 
-	// Генерируем nodeID
-	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
-
-	// Создаем data service
-	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
-
-	// Получаем credential
-	cred, err := dataService.GetCredential(ctx, credentialID)
+	// Получаем credential через data service
+	cred, err := c.dataService.GetCredential(ctx, credentialID)
 	if err != nil {
 		if err == storage.ErrEntryNotFound {
 			return fmt.Errorf("credential not found with ID: %s", credentialID)

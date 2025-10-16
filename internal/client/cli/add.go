@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/iudanet/gophkeeper/internal/client/data"
-	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/crypto"
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
@@ -34,29 +31,6 @@ func (c *Cli) runAdd(ctx context.Context, args []string) error {
 
 func (c *Cli) runAddCredential(ctx context.Context) error {
 	fmt.Println("=== Add Credential ===")
-	fmt.Println()
-
-	// Проверяем авторизацию
-	authData, err := c.boltStorage.GetAuth(ctx)
-	if err != nil {
-		if err == storage.ErrAuthNotFound {
-			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
-		}
-		return fmt.Errorf("failed to get auth data: %w", err)
-	}
-
-	// Запрашиваем master password для получения encryption_key
-	masterPassword, err := readPassword("Master password: ")
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
-	}
-
-	// Деривируем ключи
-	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
-	if err != nil {
-		return fmt.Errorf("failed to derive keys: %w", err)
-	}
-
 	fmt.Println()
 	fmt.Println("Enter credential details:")
 	fmt.Println()
@@ -109,20 +83,11 @@ func (c *Cli) runAddCredential(ctx context.Context) error {
 		},
 	}
 
-	// Получаем User ID из authData
-	// Примечание: в текущей реализации userID хранится в authData (возможно потребуется добавить)
-	// Для простоты используем username как userID
-	userID := authData.Username
+	// Используем username как userID
+	userID := c.authData.Username
 
-	// Генерируем nodeID (уникальный ID клиента)
-	// В реальном приложении это должен быть постоянный ID, сохраненный в БД
-	nodeID := fmt.Sprintf("%s-client", authData.Username)
-
-	// Создаем data service
-	dataService := data.NewService(c.boltStorage, keys.EncryptionKey, nodeID)
-
-	// Добавляем credential
-	if err := dataService.AddCredential(ctx, userID, cred); err != nil {
+	// Добавляем credential через data service
+	if err := c.dataService.AddCredential(ctx, userID, cred); err != nil {
 		return fmt.Errorf("failed to add credential: %w", err)
 	}
 
@@ -162,10 +127,8 @@ func (c *Cli) runAddText(ctx context.Context) error {
 	}
 
 	userID := c.authData.Username
-	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
-	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
 
-	if err := dataService.AddTextData(ctx, userID, textData); err != nil {
+	if err := c.dataService.AddTextData(ctx, userID, textData); err != nil {
 		return fmt.Errorf("failed to add text data: %w", err)
 	}
 
@@ -228,10 +191,8 @@ func (c *Cli) runAddCard(ctx context.Context) error {
 	}
 
 	userID := c.authData.Username
-	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
-	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
 
-	if err := dataService.AddCardData(ctx, userID, cardData); err != nil {
+	if err := c.dataService.AddCardData(ctx, userID, cardData); err != nil {
 		return fmt.Errorf("failed to add card: %w", err)
 	}
 

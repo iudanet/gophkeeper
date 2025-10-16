@@ -10,11 +10,8 @@ import (
 func (c *Cli) runLogout(ctx context.Context) error {
 	fmt.Println("=== Logout ===")
 
-	// Создаем authStore с encryption_key
-	authStore := auth.NewAuthService(c.boltStorage, c.keys.EncryptionKey)
-
 	// Создаем auth.Service с authStore
-	authService := auth.NewService(c.apiClient, authStore)
+	authService := auth.NewService(c.apiClient, c.authService)
 
 	// Выполняем logout
 	if err := authService.Logout(ctx); err != nil {

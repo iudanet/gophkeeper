@@ -3,8 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-
-	"github.com/iudanet/gophkeeper/internal/client/data"
 )
 
 func (c *Cli) runList(ctx context.Context, args []string) error {
@@ -32,14 +30,8 @@ func (c *Cli) runList(ctx context.Context, args []string) error {
 func (c *Cli) runListCredentials(ctx context.Context) error {
 	fmt.Println("=== Saved Credentials ===")
 
-	// Генерируем nodeID
-	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
-
-	// Создаем data service
-	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
-
-	// Получаем список credentials
-	credentials, err := dataService.ListCredentials(ctx)
+	// Получаем список credentials через data service
+	credentials, err := c.dataService.ListCredentials(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list credentials: %w", err)
 	}

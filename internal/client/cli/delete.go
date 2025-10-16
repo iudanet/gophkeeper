@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 )
 
@@ -18,14 +17,8 @@ func (c *Cli) runDelete(ctx context.Context, args []string) error {
 
 	fmt.Println("=== Delete Credential ===")
 
-	// Генерируем nodeID
-	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
-
-	// Создаем data service
-	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
-
 	// Сначала получаем credential для показа информации
-	cred, err := dataService.GetCredential(ctx, credentialID)
+	cred, err := c.dataService.GetCredential(ctx, credentialID)
 	if err != nil {
 		if err == storage.ErrEntryNotFound {
 			return fmt.Errorf("credential not found with ID: %s", credentialID)
@@ -56,7 +49,7 @@ func (c *Cli) runDelete(ctx context.Context, args []string) error {
 	}
 
 	// Удаляем credential (soft delete)
-	if err := dataService.DeleteCredential(ctx, credentialID); err != nil {
+	if err := c.dataService.DeleteCredential(ctx, credentialID); err != nil {
 		return fmt.Errorf("failed to delete credential: %w", err)
 	}
 

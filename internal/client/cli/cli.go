@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	"github.com/iudanet/gophkeeper/internal/client/api"
+	"github.com/iudanet/gophkeeper/internal/client/auth"
+	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 	"github.com/iudanet/gophkeeper/internal/crypto"
@@ -17,10 +19,10 @@ import (
 
 type Cli struct {
 	apiClient   *api.Client
-	boltStorage *boltdb.Storage
-	keys        *crypto.Keys
-	authData    *storage.AuthData
-	// data        *data.Service
+	boltStorage *boltdb.Storage   // raw storage layer
+	authService *auth.AuthService // auth layer with encryption
+	dataService *data.Service     // data layer with encryption
+	authData    *storage.AuthData // cached auth data (with encrypted tokens in storage)
 }
 
 func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
@@ -31,7 +33,7 @@ func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
 }
 
 func (c *Cli) ReadMasterMasspwrd(ctx context.Context) error {
-	// Проверяем авторизацию
+	// Проверяем авторизацию (читаем через raw storage для получения username и salt)
 	authData, err := c.boltStorage.GetAuth(ctx)
 	if err != nil {
 		if err == storage.ErrAuthNotFound {
@@ -52,7 +54,11 @@ func (c *Cli) ReadMasterMasspwrd(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to derive keys: %w", err)
 	}
-	c.keys = keys
+
+	// Инициализируем auth и data сервисы с encryption key
+	c.authService = auth.NewAuthService(c.boltStorage, keys.EncryptionKey)
+	c.dataService = data.NewService(c.boltStorage, keys.EncryptionKey, c.authData.NodeID)
+
 	return nil
 }
 

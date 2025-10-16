@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/crypto"
@@ -46,6 +47,7 @@ func NewService(apiClient *api.Client, authStore AuthStore) *Service {
 type RegisterResult struct {
 	UserID        string // UUID пользователя
 	Username      string // username
+	NodeID        string // уникальный ID клиента/устройства для CRDT
 	PublicSalt    string // public salt (base64)
 	EncryptionKey []byte // ключ шифрования (НЕ сохраняется!)
 }
@@ -91,10 +93,14 @@ func (s *Service) Register(ctx context.Context, username, masterPassword string)
 		return nil, fmt.Errorf("registration failed: %w", err)
 	}
 
-	// 5. Возвращаем результат
+	// 5. Генерируем уникальный NodeID для этого клиента
+	nodeID := uuid.New().String()
+
+	// 6. Возвращаем результат
 	return &RegisterResult{
 		UserID:        resp.UserID,
 		Username:      username,
+		NodeID:        nodeID,
 		PublicSalt:    publicSaltBase64,
 		EncryptionKey: keys.EncryptionKey,
 	}, nil
@@ -105,6 +111,7 @@ type LoginResult struct {
 	AccessToken   string
 	RefreshToken  string
 	Username      string
+	NodeID        string // уникальный ID клиента/устройства для CRDT
 	PublicSalt    string
 	EncryptionKey []byte
 	ExpiresIn     int64
@@ -150,12 +157,19 @@ func (s *Service) Login(ctx context.Context, username, masterPassword string) (*
 		return nil, fmt.Errorf("login failed: %w", err)
 	}
 
-	// 5. Возвращаем результат
+	// 5. Получаем или генерируем NodeID
+	nodeID, err := s.getOrCreateNodeID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create node ID: %w", err)
+	}
+
+	// 6. Возвращаем результат
 	return &LoginResult{
 		AccessToken:   resp.AccessToken,
 		RefreshToken:  resp.RefreshToken,
 		ExpiresIn:     resp.ExpiresIn,
 		Username:      username,
+		NodeID:        nodeID,
 		PublicSalt:    saltResp.PublicSalt,
 		EncryptionKey: keys.EncryptionKey,
 	}, nil
@@ -183,4 +197,31 @@ func (s *Service) Logout(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// getOrCreateNodeID возвращает существующий NodeID или создает новый
+// NodeID должен быть уникальным для каждого физического клиента/устройства
+func (s *Service) getOrCreateNodeID(ctx context.Context) (string, error) {
+	// Если authStore не инициализирован (это первый login/register), создаем новый NodeID
+	if s.authStore == nil {
+		return uuid.New().String(), nil
+	}
+
+	// Проверяем есть ли уже сохраненный NodeID в auth data
+	authData, err := s.authStore.GetAuth(ctx)
+	if err != nil {
+		// Если данных нет (первый login на этом устройстве), создаем новый NodeID
+		if err == storage.ErrAuthNotFound {
+			return uuid.New().String(), nil
+		}
+		return "", fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	// Если NodeID уже есть, используем его (повторный login на том же устройстве)
+	if authData.NodeID != "" {
+		return authData.NodeID, nil
+	}
+
+	// Если NodeID пустой (старая версия базы), создаем новый
+	return uuid.New().String(), nil
 }

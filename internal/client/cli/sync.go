@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/sync"
 )
 
@@ -15,8 +14,7 @@ func (c *Cli) runSync(ctx context.Context) error {
 	fmt.Println("=== Synchronization ===")
 
 	// Получаем access token (расшифровываем)
-	authStore := auth.NewAuthService(c.boltStorage, c.keys.EncryptionKey)
-	authDataDecrypted, err := authStore.GetAuth(ctx)
+	authDataDecrypted, err := c.authService.GetAuth(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get auth data: %w", err)
 	}
