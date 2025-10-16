@@ -43,8 +43,7 @@ func (c *Cli) runDelete(ctx context.Context, args []string) error {
 	return fmt.Errorf("entry not found with ID: %s", entryID)
 }
 
-func (c *Cli) deleteCredential(ctx context.Context, id string, cred interface{}) error {
-	credential := cred.(*models.Credential)
+func (c *Cli) deleteCredential(ctx context.Context, id string, credential *models.Credential) error {
 
 	fmt.Println("=== Delete Credential ===")
 	fmt.Println()
@@ -79,8 +78,7 @@ func (c *Cli) deleteCredential(ctx context.Context, id string, cred interface{})
 	return nil
 }
 
-func (c *Cli) deleteTextData(ctx context.Context, id string, text interface{}) error {
-	textData := text.(*models.TextData)
+func (c *Cli) deleteTextData(ctx context.Context, id string, textData *models.TextData) error {
 
 	fmt.Println("=== Delete Text Data ===")
 	fmt.Println()
@@ -116,8 +114,7 @@ func (c *Cli) deleteTextData(ctx context.Context, id string, text interface{}) e
 	return nil
 }
 
-func (c *Cli) deleteBinaryData(ctx context.Context, id string, binary interface{}) error {
-	binaryData := binary.(*models.BinaryData)
+func (c *Cli) deleteBinaryData(ctx context.Context, id string, binaryData *models.BinaryData) error {
 
 	fmt.Println("=== Delete Binary Data ===")
 	fmt.Println()
@@ -152,8 +149,7 @@ func (c *Cli) deleteBinaryData(ctx context.Context, id string, binary interface{
 	return nil
 }
 
-func (c *Cli) deleteCardData(ctx context.Context, id string, card interface{}) error {
-	cardData := card.(*models.CardData)
+func (c *Cli) deleteCardData(ctx context.Context, id string, cardData *models.CardData) error {
 
 	fmt.Println("=== Delete Card Data ===")
 	fmt.Println()
