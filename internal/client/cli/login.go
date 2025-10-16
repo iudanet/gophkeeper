@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 )
 
@@ -28,16 +27,16 @@ func (c *Cli) runLogin(ctx context.Context) error {
 	fmt.Println()
 	fmt.Println("Authenticating...")
 
-	// Создаем auth.Service (без authStore на этом этапе)
-	authService := auth.NewService(c.apiClient, nil)
-
-	// Логин
-	result, err := authService.Login(ctx, username, pass)
+	// Логин через authService
+	result, err := c.authService.Login(ctx, username, pass)
 	if err != nil {
 		return err
 	}
 
-	// Сохраняем токены через слой шифрования
+	// Устанавливаем ключ шифрования в authService
+	c.authService.SetEncryptionKey(result.EncryptionKey)
+
+	// Сохраняем токены через authService (теперь с установленным ключом)
 	authData := &storage.AuthData{
 		Username:     result.Username,
 		UserID:       result.UserID,       // User UUID from server
@@ -48,7 +47,7 @@ func (c *Cli) runLogin(ctx context.Context) error {
 		ExpiresAt:    time.Now().Unix() + result.ExpiresIn,
 	}
 
-	if err := c.authService.SaveAuth(ctx, authData, result.EncryptionKey); err != nil {
+	if err := c.authService.SaveAuth(ctx, authData); err != nil {
 		return fmt.Errorf("failed to save auth data: %w", err)
 	}
 

@@ -67,27 +67,27 @@ func main() {
 	apiClient := api.NewClient(*serverURL)
 
 	// Создаем сервисы
-	authService := auth.NewAuthService(boltStorage)
+	authService := auth.NewAuthService(apiClient, boltStorage)
 	dataService := data.NewService(boltStorage)
 	syncService := sync.NewService(apiClient, boltStorage, boltStorage, logger)
 
 	// Создаем CLI с сервисами (без прямого доступа к storage)
 	commands := cli.New(apiClient, authService, dataService, syncService)
 
-	// Получаем команду
-	command := args[0]
+	// // Получаем команду
+	// command := args[0]
 
-	// Для register и login не нужен мастер-пароль (база ещё не создана)
-	needMasterPassword := command != "register" && command != "login"
+	// // Для register и login не нужен мастер-пароль (база ещё не создана)
+	// needMasterPassword := command != "register" && command != "login"
 
-	if needMasterPassword {
-		// Передаем параметры мастер-пароля
-		errPass := commands.ReadMasterPassword(ctx, *masterPassword, *masterPasswordFile)
-		if errPass != nil {
-			fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
-			os.Exit(1)
-		}
+	// if needMasterPassword {
+	// 	// Передаем параметры мастер-пароля
+	errPass := commands.ReadMasterPassword(ctx, *masterPassword, *masterPasswordFile)
+	if errPass != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
+		os.Exit(1)
 	}
+	// }
 
 	commands.Run(ctx, args)
 }

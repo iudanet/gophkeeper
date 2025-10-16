@@ -14,6 +14,7 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/client/sync"
 	"github.com/iudanet/gophkeeper/internal/crypto"
+	"github.com/iudanet/gophkeeper/internal/validation"
 	"golang.org/x/term"
 )
 
@@ -56,6 +57,9 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPass
 		return fmt.Errorf("failed to get master password: %w", err)
 	}
 
+	if err := validation.ValidatePassword(masterPassword); err != nil {
+		return fmt.Errorf("invalid password: %w", err)
+	}
 	// Деривируем ключи из master password + username + public salt
 	keys, err := crypto.DeriveKeysFromBase64Salt(password, encryptedAuthData.Username, encryptedAuthData.PublicSalt)
 	if err != nil {
@@ -65,8 +69,11 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPass
 	// Сохраняем encryption key в памяти для текущей сессии
 	c.encryptionKey = keys.EncryptionKey
 
+	// Устанавливаем ключ шифрования в authService
+	c.authService.SetEncryptionKey(c.encryptionKey)
+
 	// Получаем расшифрованные auth данные
-	authData, err := c.authService.GetAuthDecryptData(ctx, c.encryptionKey)
+	authData, err := c.authService.GetAuthDecryptData(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to decrypt auth data: %w", err)
 	}
