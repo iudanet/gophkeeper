@@ -18,12 +18,13 @@ func (c *Cli) runLogin(ctx context.Context) error {
 		return fmt.Errorf("failed to read username: %w", err)
 	}
 
-	// Запрашиваем master password
-	pass, err := readPassword("Master password: ")
+	// Получаем master password из различных источников
+	pass, err := c.getMasterPassword(*c.pass)
 	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
+		return fmt.Errorf("failed to get master password: %w", err)
 	}
-
+	// очищаем пароли так как больше ненадо
+	c.pass = nil
 	fmt.Println()
 	fmt.Println("Authenticating...")
 

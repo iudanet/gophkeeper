@@ -17,7 +17,7 @@ func TestGetMasterPassword_FromEnvVar(t *testing.T) {
 	defer func() {
 		require.NoError(t, os.Unsetenv("GOPHKEEPER_MASTER_PASSWORD"))
 	}()
-	passwords := Passwors{
+	passwords := Passwords{
 		FromFile: "",
 		FromArgs: "",
 	}
@@ -45,7 +45,7 @@ func TestGetMasterPassword_FromFile(t *testing.T) {
 	_, err = tmpfile.WriteString(testPassword + "\n")
 	require.NoError(t, err)
 	require.NoError(t, tmpfile.Close())
-	passwords := Passwors{
+	passwords := Passwords{
 		FromFile: tmpfile.Name(),
 		FromArgs: "",
 	}
@@ -61,7 +61,7 @@ func TestGetMasterPassword_FromFile(t *testing.T) {
 func TestGetMasterPassword_FromCLIParam(t *testing.T) {
 	// Setup
 	cli := &Cli{}
-	pass := Passwors{
+	pass := Passwords{
 		FromFile: "",
 		FromArgs: "test_cli_password_789",
 	}
@@ -97,7 +97,7 @@ func TestGetMasterPassword_Priority(t *testing.T) {
 	defer func() {
 		require.NoError(t, os.Unsetenv("GOPHKEEPER_MASTER_PASSWORD"))
 	}()
-	pass := Passwors{
+	pass := Passwords{
 		FromFile: tmpfile.Name(),
 		FromArgs: cliPassword,
 	}
@@ -125,7 +125,7 @@ func TestGetMasterPassword_FileOverCLI(t *testing.T) {
 	_, err = tmpfile.WriteString(filePassword)
 	require.NoError(t, err)
 	require.NoError(t, tmpfile.Close())
-	pass := Passwors{
+	pass := Passwords{
 		FromFile: tmpfile.Name(),
 		FromArgs: cliPassword,
 	}
@@ -149,7 +149,7 @@ func TestGetMasterPassword_EmptyFile(t *testing.T) {
 		require.NoError(t, os.Remove(tmpfile.Name()))
 	}()
 	require.NoError(t, tmpfile.Close())
-	pass := Passwors{
+	pass := Passwords{
 		FromFile: tmpfile.Name(),
 		FromArgs: "",
 	}
@@ -166,7 +166,7 @@ func TestGetMasterPassword_EmptyFile(t *testing.T) {
 func TestGetMasterPassword_FileNotFound(t *testing.T) {
 	// Setup
 	cli := &Cli{}
-	pass := Passwors{
+	pass := Passwords{
 		FromFile: "/nonexistent/file/path.txt",
 		FromArgs: "",
 	}
@@ -194,7 +194,7 @@ func TestGetMasterPassword_FileWithWhitespace(t *testing.T) {
 	_, err = tmpfile.WriteString("  " + testPassword + "  \n\n")
 	require.NoError(t, err)
 	require.NoError(t, tmpfile.Close())
-	pass := Passwors{
+	pass := Passwords{
 		FromFile: tmpfile.Name(),
 		FromArgs: "",
 	}

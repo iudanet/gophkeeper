@@ -18,7 +18,7 @@ import (
 	"golang.org/x/term"
 )
 
-type Passwors struct {
+type Passwords struct {
 	FromFile string
 	FromArgs string
 }
@@ -29,15 +29,17 @@ type Cli struct {
 	dataService   *data.Service
 	syncService   *sync.Service
 	authData      *storage.AuthData
+	pass          *Passwords // временно храним. при возможности удаляем
 	encryptionKey []byte
 }
 
-func New(apiClient *api.Client, authService *auth.AuthService, dataService *data.Service, syncService *sync.Service) *Cli {
+func New(apiClient *api.Client, authService *auth.AuthService, dataService *data.Service, syncService *sync.Service, pass *Passwords) *Cli {
 	return &Cli{
 		apiClient:   apiClient,
 		authService: authService,
 		dataService: dataService,
 		syncService: syncService,
+		pass:        pass,
 	}
 }
 
@@ -46,7 +48,7 @@ func New(apiClient *api.Client, authService *auth.AuthService, dataService *data
 // 2. File specified in masterPasswordFile parameter
 // 3. Command-line parameter masterPassword
 // 4. Interactive prompt (fallback)
-func (c *Cli) ReadMasterPassword(ctx context.Context, passwords Passwors) error {
+func (c *Cli) ReadMasterPassword(ctx context.Context) error {
 	// Получаем зашифрованные auth данные для получения username и public salt
 	encryptedAuthData, err := c.authService.GetAuthEncryptData(ctx)
 	if err != nil {
@@ -57,14 +59,14 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, passwords Passwors) error 
 	}
 
 	// Получаем master password из различных источников
-	password, err := c.getMasterPassword(passwords)
+	password, err := c.getMasterPassword(*c.pass)
 	if err != nil {
 		return fmt.Errorf("failed to get master password: %w", err)
 	}
 
-	if err := validation.ValidatePassword(password); err != nil {
-		return fmt.Errorf("invalid password: %w", err)
-	}
+	// очищаем пароль после использования
+	c.pass = nil
+
 	// Деривируем ключи из master password + username + public salt
 	keys, err := crypto.DeriveKeysFromBase64Salt(password, encryptedAuthData.Username, encryptedAuthData.PublicSalt)
 	if err != nil {
@@ -93,7 +95,7 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, passwords Passwors) error 
 // 2. File specified in masterPasswordFile parameter
 // 3. Command-line parameter masterPassword
 // 4. Interactive prompt (fallback)
-func (c *Cli) getMasterPassword(passwords Passwors) (string, error) {
+func (c *Cli) getMasterPassword(passwords Passwords) (string, error) {
 	// Priority 1: Environment variable
 	if envPassword := os.Getenv("GOPHKEEPER_MASTER_PASSWORD"); envPassword != "" {
 		return envPassword, nil
@@ -126,7 +128,9 @@ func (c *Cli) getMasterPassword(passwords Passwors) (string, error) {
 	if password == "" {
 		return "", fmt.Errorf("password cannot be empty")
 	}
-
+	if err := validation.ValidatePassword(password); err != nil {
+		return "", fmt.Errorf("invalid password: %w", err)
+	}
 	return password, nil
 }
 

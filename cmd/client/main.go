@@ -31,7 +31,7 @@ func main() {
 	masterPasswordFile := flag.String("master-password-file", "", "Path to file containing master password")
 
 	flag.Parse()
-	pass := cli.Passwors{
+	pass := cli.Passwords{
 		FromFile: *masterPasswordFile,
 		FromArgs: *masterPassword,
 	}
@@ -75,12 +75,15 @@ func main() {
 	syncService := sync.NewService(apiClient, boltStorage, boltStorage, logger)
 
 	// Создаем CLI с сервисами (без прямого доступа к storage)
-	commands := cli.New(apiClient, authService, dataService, syncService)
+	commands := cli.New(apiClient, authService, dataService, syncService, &pass)
 
-	errPass := commands.ReadMasterPassword(ctx, pass)
-	if errPass != nil {
-		fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
-		os.Exit(1)
+	command := args[0]
+	if command != "login" {
+		errPass := commands.ReadMasterPassword(ctx)
+		if errPass != nil {
+			fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
+			os.Exit(1)
+		}
 	}
 
 	commands.Run(ctx, args)
