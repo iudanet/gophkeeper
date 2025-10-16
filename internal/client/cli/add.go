@@ -6,12 +6,11 @@ import (
 
 	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 	"github.com/iudanet/gophkeeper/internal/crypto"
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
-func RunAdd(ctx context.Context, args []string, boltStorage *boltdb.Storage) error {
+func (c *Cli) runAdd(ctx context.Context, args []string) error {
 	// Проверяем подкоманду
 	if len(args) == 0 {
 		return fmt.Errorf("missing data type. Usage: gophkeeper add <credential|text|binary|card>")
@@ -21,24 +20,24 @@ func RunAdd(ctx context.Context, args []string, boltStorage *boltdb.Storage) err
 
 	switch dataType {
 	case "credential":
-		return RunAddCredential(ctx, boltStorage)
+		return c.runAddCredential(ctx)
 	case "text":
-		return RunAddText(ctx, boltStorage)
+		return c.runAddText(ctx)
 	case "binary":
 		return fmt.Errorf("'add binary' not fully implemented yet. Use: gophkeeper add text for now")
 	case "card":
-		return RunAddCard(ctx, boltStorage)
+		return c.runAddCard(ctx)
 	default:
 		return fmt.Errorf("unknown data type: %s. Use: credential, text, binary, or card", dataType)
 	}
 }
 
-func RunAddCredential(ctx context.Context, boltStorage *boltdb.Storage) error {
+func (c *Cli) runAddCredential(ctx context.Context) error {
 	fmt.Println("=== Add Credential ===")
 	fmt.Println()
 
 	// Проверяем авторизацию
-	authData, err := boltStorage.GetAuth(ctx)
+	authData, err := c.boltStorage.GetAuth(ctx)
 	if err != nil {
 		if err == storage.ErrAuthNotFound {
 			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
@@ -120,7 +119,7 @@ func RunAddCredential(ctx context.Context, boltStorage *boltdb.Storage) error {
 	nodeID := fmt.Sprintf("%s-client", authData.Username)
 
 	// Создаем data service
-	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+	dataService := data.NewService(c.boltStorage, keys.EncryptionKey, nodeID)
 
 	// Добавляем credential
 	if err := dataService.AddCredential(ctx, userID, cred); err != nil {
@@ -137,11 +136,11 @@ func RunAddCredential(ctx context.Context, boltStorage *boltdb.Storage) error {
 	return nil
 }
 
-func RunAddText(ctx context.Context, boltStorage *boltdb.Storage) error {
+func (c *Cli) runAddText(ctx context.Context) error {
 	fmt.Println("=== Add Text Data ===")
 	fmt.Println()
 
-	authData, err := boltStorage.GetAuth(ctx)
+	authData, err := c.boltStorage.GetAuth(ctx)
 	if err != nil {
 		if err == storage.ErrAuthNotFound {
 			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
@@ -184,7 +183,7 @@ func RunAddText(ctx context.Context, boltStorage *boltdb.Storage) error {
 
 	userID := authData.Username
 	nodeID := fmt.Sprintf("%s-client", authData.Username)
-	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+	dataService := data.NewService(c.boltStorage, keys.EncryptionKey, nodeID)
 
 	if err := dataService.AddTextData(ctx, userID, textData); err != nil {
 		return fmt.Errorf("failed to add text data: %w", err)
@@ -199,11 +198,11 @@ func RunAddText(ctx context.Context, boltStorage *boltdb.Storage) error {
 	return nil
 }
 
-func RunAddCard(ctx context.Context, boltStorage *boltdb.Storage) error {
+func (c *Cli) runAddCard(ctx context.Context) error {
 	fmt.Println("=== Add Card Data ===")
 	fmt.Println()
 
-	authData, err := boltStorage.GetAuth(ctx)
+	authData, err := c.boltStorage.GetAuth(ctx)
 	if err != nil {
 		if err == storage.ErrAuthNotFound {
 			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
@@ -270,7 +269,7 @@ func RunAddCard(ctx context.Context, boltStorage *boltdb.Storage) error {
 
 	userID := authData.Username
 	nodeID := fmt.Sprintf("%s-client", authData.Username)
-	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+	dataService := data.NewService(c.boltStorage, keys.EncryptionKey, nodeID)
 
 	if err := dataService.AddCardData(ctx, userID, cardData); err != nil {
 		return fmt.Errorf("failed to add card: %w", err)

@@ -6,7 +6,8 @@ import (
 	"os"
 )
 
-func (c *Cli) Run(ctx context.Context, command string, args []string) {
+func (c *Cli) Run(ctx context.Context, args []string) {
+	command := args[0]
 	switch command {
 	case "register":
 		if err := RunRegister(ctx, c.apiClient, c.boltStorage); err != nil {
@@ -29,7 +30,7 @@ func (c *Cli) Run(ctx context.Context, command string, args []string) {
 			os.Exit(1)
 		}
 	case "add":
-		if err := RunAdd(ctx, args[1:], c.boltStorage); err != nil {
+		if err := c.runAdd(ctx, args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

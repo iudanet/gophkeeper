@@ -40,8 +40,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	command := args[0]
-
 	// Создаем контекст
 	ctx := context.Background()
 
@@ -60,7 +58,7 @@ func main() {
 	// Создаем API клиент
 	apiClient := api.NewClient(*serverURL)
 	commands := cli.New(apiClient, boltStorage)
-	commands.Run(ctx, command, args)
+	commands.Run(ctx, args)
 }
 
 func printVersion() {
