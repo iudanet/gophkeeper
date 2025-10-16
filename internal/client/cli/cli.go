@@ -12,7 +12,7 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
+	"github.com/iudanet/gophkeeper/internal/client/sync"
 	"github.com/iudanet/gophkeeper/internal/crypto"
 	"golang.org/x/term"
 )
@@ -21,17 +21,17 @@ type Cli struct {
 	apiClient     *api.Client
 	authService   *auth.AuthService
 	dataService   *data.Service
+	syncService   *sync.Service
 	authData      *storage.AuthData
-	boltStorage   *boltdb.Storage
 	encryptionKey []byte
 }
 
-func New(apiClient *api.Client, authService *auth.AuthService, boltStorage *boltdb.Storage) *Cli {
+func New(apiClient *api.Client, authService *auth.AuthService, dataService *data.Service, syncService *sync.Service) *Cli {
 	return &Cli{
 		apiClient:   apiClient,
 		authService: authService,
-		boltStorage: boltStorage,
-		dataService: data.NewService(boltStorage), // Создаем сразу, без key/nodeID
+		dataService: dataService,
+		syncService: syncService,
 	}
 }
 

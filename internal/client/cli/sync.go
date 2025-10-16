@@ -3,11 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 	"time"
-
-	"github.com/iudanet/gophkeeper/internal/client/sync"
 )
 
 func (c *Cli) runSync(ctx context.Context) error {
@@ -29,19 +25,11 @@ func (c *Cli) runSync(ctx context.Context) error {
 	fmt.Println()
 	fmt.Println("Starting synchronization with server...")
 
-	// Создаем logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
-	// Создаем sync service (boltStorage реализует и CRDTStorage, и MetadataStorage)
-	syncService := sync.NewService(c.apiClient, c.boltStorage, c.boltStorage, logger)
-
-	// Получаем userID (используем username как userID)
+	// Получаем userID
 	userID := c.authData.UserID
 
-	// Выполняем синхронизацию
-	result, err := syncService.Sync(ctx, userID, accessToken)
+	// Выполняем синхронизацию через готовый сервис
+	result, err := c.syncService.Sync(ctx, userID, accessToken)
 	if err != nil {
 		return fmt.Errorf("synchronization failed: %w", err)
 	}

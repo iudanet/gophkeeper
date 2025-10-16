@@ -10,7 +10,9 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/cli"
+	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
+	"github.com/iudanet/gophkeeper/internal/client/sync"
 )
 
 var (
@@ -58,11 +60,19 @@ func main() {
 		}
 	}()
 
+	// Создаем logger
+	logger := slog.Default()
+
 	// Создаем API клиент
 	apiClient := api.NewClient(*serverURL)
+
+	// Создаем сервисы
 	authService := auth.NewAuthService(boltStorage)
-	// DataService создается позже, после получения encryption key
-	commands := cli.New(apiClient, authService, boltStorage)
+	dataService := data.NewService(boltStorage)
+	syncService := sync.NewService(apiClient, boltStorage, boltStorage, logger)
+
+	// Создаем CLI с сервисами (без прямого доступа к storage)
+	commands := cli.New(apiClient, authService, dataService, syncService)
 
 	// Получаем команду
 	command := args[0]
