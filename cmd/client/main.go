@@ -59,59 +59,8 @@ func main() {
 
 	// Создаем API клиент
 	apiClient := api.NewClient(*serverURL)
-
-	// Выполняем команду
-	switch command {
-	case "register":
-		if err := cli.RunRegister(ctx, apiClient, boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "login":
-		if err := cli.RunLogin(ctx, apiClient, boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "logout":
-		if err := cli.RunLogout(ctx, apiClient, boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "status":
-		if err := cli.RunStatus(ctx, boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "add":
-		if err := cli.RunAdd(ctx, args[1:], boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "list":
-		if err := cli.RunList(ctx, args[1:], boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "get":
-		if err := cli.RunGet(ctx, args[1:], boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "delete":
-		if err := cli.RunDelete(ctx, args[1:], boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "sync":
-		if err := cli.RunSync(ctx, apiClient, boltStorage); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
-		cli.PrintUsage()
-		os.Exit(1)
-	}
+	commands := cli.New(apiClient, boltStorage)
+	commands.Run(ctx, command, args)
 }
 
 func printVersion() {

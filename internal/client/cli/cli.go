@@ -7,32 +7,21 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/iudanet/gophkeeper/internal/client/api"
+	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 	"golang.org/x/term"
 )
 
-type Commands struct {
+type Cli struct {
+	apiClient   *api.Client
+	boltStorage *boltdb.Storage
 }
 
-// readInput читает строку из stdin
-func readInput(prompt string) (string, error) {
-	fmt.Print(prompt)
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
+func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
+	return &Cli{
+		apiClient:   apiClient,
+		boltStorage: boltStorage,
 	}
-	return strings.TrimSpace(input), nil
-}
-
-// readPassword читает пароль без отображения на экране
-func readPassword(prompt string) (string, error) {
-	fmt.Print(prompt)
-	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println() // Переход на новую строку после ввода пароля
-	if err != nil {
-		return "", err
-	}
-	return string(passwordBytes), nil
 }
 
 func PrintUsage() {
@@ -67,4 +56,26 @@ func PrintUsage() {
 	fmt.Println("  gophkeeper delete b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
 	fmt.Println("  gophkeeper sync")
 	fmt.Println("  gophkeeper --server https://example.com login")
+}
+
+// readInput читает строку из stdin
+func readInput(prompt string) (string, error) {
+	fmt.Print(prompt)
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(input), nil
+}
+
+// readPassword читает пароль без отображения на экране
+func readPassword(prompt string) (string, error) {
+	fmt.Print(prompt)
+	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println() // Переход на новую строку после ввода пароля
+	if err != nil {
+		return "", err
+	}
+	return string(passwordBytes), nil
 }
