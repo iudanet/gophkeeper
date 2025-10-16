@@ -6,11 +6,9 @@ import (
 
 	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
-	"github.com/iudanet/gophkeeper/internal/crypto"
 )
 
-func RunDelete(ctx context.Context, args []string, boltStorage *boltdb.Storage) error {
+func (c *Cli) runDelete(ctx context.Context, args []string) error {
 	// Проверяем наличие ID
 	if len(args) == 0 {
 		return fmt.Errorf("missing credential ID. Usage: gophkeeper delete <id>")
@@ -19,34 +17,12 @@ func RunDelete(ctx context.Context, args []string, boltStorage *boltdb.Storage) 
 	credentialID := args[0]
 
 	fmt.Println("=== Delete Credential ===")
-	fmt.Println()
-
-	// Проверяем авторизацию
-	authData, err := boltStorage.GetAuth(ctx)
-	if err != nil {
-		if err == storage.ErrAuthNotFound {
-			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
-		}
-		return fmt.Errorf("failed to get auth data: %w", err)
-	}
-
-	// Запрашиваем master password для получения encryption_key
-	masterPassword, err := readPassword("Master password: ")
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
-	}
-
-	// Деривируем ключи
-	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
-	if err != nil {
-		return fmt.Errorf("failed to derive keys: %w", err)
-	}
 
 	// Генерируем nodeID
-	nodeID := fmt.Sprintf("%s-client", authData.Username)
+	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
 
 	// Создаем data service
-	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
 
 	// Сначала получаем credential для показа информации
 	cred, err := dataService.GetCredential(ctx, credentialID)

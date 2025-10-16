@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 )
 
-func RunLogin(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.Storage) error {
+func (c *Cli) runLogin(ctx context.Context) error {
 	fmt.Println("=== Login ===")
 	fmt.Println()
 
@@ -31,7 +29,7 @@ func RunLogin(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.St
 	fmt.Println("Authenticating...")
 
 	// Создаем auth.Service (без authStore на этом этапе)
-	authService := auth.NewService(apiClient, nil)
+	authService := auth.NewService(c.apiClient, nil)
 
 	// Логин
 	result, err := authService.Login(ctx, username, masterPassword)
@@ -40,7 +38,7 @@ func RunLogin(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.St
 	}
 
 	// Теперь у нас есть encryption_key, создаем AuthService (слой шифрования)
-	authStore := auth.NewAuthService(boltStorage, result.EncryptionKey)
+	authStore := auth.NewAuthService(c.boltStorage, result.EncryptionKey)
 
 	// Сохраняем токены через слой шифрования
 	authData := &storage.AuthData{

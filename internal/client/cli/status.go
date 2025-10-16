@@ -4,16 +4,14 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 )
 
-func RunStatus(ctx context.Context, boltStorage *boltdb.Storage) error {
+func (c *Cli) runStatus(ctx context.Context) error {
 	fmt.Println("=== Authentication Status ===")
 	fmt.Println()
 
 	// Проверяем наличие сохраненной сессии
-	isAuth, err := boltStorage.IsAuthenticated(ctx)
+	isAuth, err := c.boltStorage.IsAuthenticated(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check authentication: %w", err)
 	}
@@ -26,7 +24,7 @@ func RunStatus(ctx context.Context, boltStorage *boltdb.Storage) error {
 	}
 
 	// Получаем данные
-	authData, err := boltStorage.GetAuth(ctx)
+	authData, err := c.boltStorage.GetAuth(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get auth data: %w", err)
 	}

@@ -7,41 +7,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
-	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 	"github.com/iudanet/gophkeeper/internal/client/sync"
-	"github.com/iudanet/gophkeeper/internal/crypto"
 )
 
-func RunSync(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.Storage) error {
+func (c *Cli) runSync(ctx context.Context) error {
 	fmt.Println("=== Synchronization ===")
-	fmt.Println()
-
-	// Проверяем авторизацию
-	authData, err := boltStorage.GetAuth(ctx)
-	if err != nil {
-		if err == storage.ErrAuthNotFound {
-			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
-		}
-		return fmt.Errorf("failed to get auth data: %w", err)
-	}
-
-	// Запрашиваем master password для получения encryption_key
-	masterPassword, err := readPassword("Master password: ")
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
-	}
-
-	// Деривируем ключи
-	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
-	if err != nil {
-		return fmt.Errorf("failed to derive keys: %w", err)
-	}
 
 	// Получаем access token (расшифровываем)
-	authStore := auth.NewAuthService(boltStorage, keys.EncryptionKey)
+	authStore := auth.NewAuthService(c.boltStorage, c.keys.EncryptionKey)
 	authDataDecrypted, err := authStore.GetAuth(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get auth data: %w", err)
@@ -49,7 +23,7 @@ func RunSync(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.Sto
 	accessToken := authDataDecrypted.AccessToken
 
 	// Проверяем что токен не истек
-	expiresAt := time.Unix(authData.ExpiresAt, 0)
+	expiresAt := time.Unix(c.authData.ExpiresAt, 0)
 	if time.Now().After(expiresAt) {
 		return fmt.Errorf("access token has expired. Please login again")
 	}
@@ -63,10 +37,10 @@ func RunSync(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.Sto
 	}))
 
 	// Создаем sync service (передаем boltStorage как metadata storage тоже)
-	syncService := sync.NewService(apiClient, boltStorage, boltStorage, logger)
+	syncService := sync.NewService(c.apiClient, c.boltStorage, c.boltStorage, logger)
 
 	// Получаем userID (используем username как userID)
-	userID := authData.Username
+	userID := c.authData.Username
 
 	// Выполняем синхронизацию
 	result, err := syncService.Sync(ctx, userID, accessToken)

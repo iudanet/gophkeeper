@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 )
 
-func RunRegister(ctx context.Context, apiClient *api.Client, boltStorage *boltdb.Storage) error {
+func (c *Cli) runRegister(ctx context.Context) error {
 	fmt.Println("=== Registration ===")
 	fmt.Println()
 
@@ -39,7 +37,7 @@ func RunRegister(ctx context.Context, apiClient *api.Client, boltStorage *boltdb
 	fmt.Println("Registering user...")
 
 	// Создаем auth.Service (без authStore, т.к. еще нет encryption_key)
-	authService := auth.NewService(apiClient, nil)
+	authService := auth.NewService(c.apiClient, nil)
 
 	// Регистрация
 	result, err := authService.Register(ctx, username, masterPassword)

@@ -5,12 +5,9 @@ import (
 	"fmt"
 
 	"github.com/iudanet/gophkeeper/internal/client/data"
-	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
-	"github.com/iudanet/gophkeeper/internal/crypto"
 )
 
-func RunList(ctx context.Context, args []string, boltStorage *boltdb.Storage) error {
+func (c *Cli) runList(ctx context.Context, args []string) error {
 	// Проверяем подкоманду
 	if len(args) == 0 {
 		return fmt.Errorf("missing data type. Usage: gophkeeper list <credentials|text|binary|card>")
@@ -20,7 +17,7 @@ func RunList(ctx context.Context, args []string, boltStorage *boltdb.Storage) er
 
 	switch dataType {
 	case "credentials", "credential":
-		return RunListCredentials(ctx, boltStorage)
+		return c.runListCredentials(ctx)
 	case "text":
 		return fmt.Errorf("'list text' not implemented yet")
 	case "binary":
@@ -32,36 +29,14 @@ func RunList(ctx context.Context, args []string, boltStorage *boltdb.Storage) er
 	}
 }
 
-func RunListCredentials(ctx context.Context, boltStorage *boltdb.Storage) error {
+func (c *Cli) runListCredentials(ctx context.Context) error {
 	fmt.Println("=== Saved Credentials ===")
-	fmt.Println()
-
-	// Проверяем авторизацию
-	authData, err := boltStorage.GetAuth(ctx)
-	if err != nil {
-		if err == storage.ErrAuthNotFound {
-			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
-		}
-		return fmt.Errorf("failed to get auth data: %w", err)
-	}
-
-	// Запрашиваем master password для получения encryption_key
-	masterPassword, err := readPassword("Master password: ")
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
-	}
-
-	// Деривируем ключи
-	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
-	if err != nil {
-		return fmt.Errorf("failed to derive keys: %w", err)
-	}
 
 	// Генерируем nodeID
-	nodeID := fmt.Sprintf("%s-client", authData.Username)
+	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
 
 	// Создаем data service
-	dataService := data.NewService(boltStorage, keys.EncryptionKey, nodeID)
+	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
 
 	// Получаем список credentials
 	credentials, err := dataService.ListCredentials(ctx)

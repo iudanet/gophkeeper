@@ -10,22 +10,22 @@ func (c *Cli) Run(ctx context.Context, args []string) {
 	command := args[0]
 	switch command {
 	case "register":
-		if err := RunRegister(ctx, c.apiClient, c.boltStorage); err != nil {
+		if err := c.runRegister(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "login":
-		if err := RunLogin(ctx, c.apiClient, c.boltStorage); err != nil {
+		if err := c.runLogin(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "logout":
-		if err := RunLogout(ctx, c.apiClient, c.boltStorage); err != nil {
+		if err := c.runLogout(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "status":
-		if err := RunStatus(ctx, c.boltStorage); err != nil {
+		if err := c.runStatus(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -35,22 +35,22 @@ func (c *Cli) Run(ctx context.Context, args []string) {
 			os.Exit(1)
 		}
 	case "list":
-		if err := RunList(ctx, args[1:], c.boltStorage); err != nil {
+		if err := c.runList(ctx, args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "get":
-		if err := RunGet(ctx, args[1:], c.boltStorage); err != nil {
+		if err := c.runGet(ctx, args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "delete":
-		if err := RunDelete(ctx, args[1:], c.boltStorage); err != nil {
+		if err := c.runDelete(ctx, args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "sync":
-		if err := RunSync(ctx, c.apiClient, c.boltStorage); err != nil {
+		if err := c.runSync(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

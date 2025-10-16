@@ -20,6 +20,7 @@ type Cli struct {
 	boltStorage *boltdb.Storage
 	keys        *crypto.Keys
 	authData    *storage.AuthData
+	// data        *data.Service
 }
 
 func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
