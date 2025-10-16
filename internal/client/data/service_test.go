@@ -674,3 +674,196 @@ func TestService_DifferentEncryptionKeys(t *testing.T) {
 	assert.Nil(t, retrievedCred)
 	assert.Contains(t, err.Error(), "failed to decrypt credential")
 }
+
+// TestAddCredential_UserIDInCRDTEntry проверяет что UserID правильно сохраняется в CRDT entry
+// Это регрессионный тест для бага, где использовался Username вместо UserID
+func TestAddCredential_UserIDInCRDTEntry(t *testing.T) {
+	mockStorage := newMockCRDTStorage()
+	encKey := []byte("12345678901234567890123456789012")
+	nodeID := "test-node-id"
+	service := NewService(mockStorage, encKey, nodeID)
+
+	ctx := context.Background()
+	// UserID должен быть UUID формат, а не username
+	userID := "2afeb7d9-7aea-47af-a96e-bbfbf3b3a5bf"
+
+	cred := &models.Credential{
+		Name:     "GitHub",
+		Login:    "testuser",
+		Password: "secret123",
+	}
+
+	err := service.AddCredential(ctx, userID, cred)
+	require.NoError(t, err)
+
+	// Проверяем что в CRDT entry сохранен именно UserID (UUID), а не username
+	assert.NotNil(t, mockStorage.lastSavedEntry)
+	assert.Equal(t, userID, mockStorage.lastSavedEntry.UserID)
+	assert.Contains(t, mockStorage.lastSavedEntry.UserID, "-")        // UUID должен содержать дефисы
+	assert.NotEqual(t, "testuser", mockStorage.lastSavedEntry.UserID) // НЕ username
+}
+
+// TestAddTextData_UserIDInCRDTEntry проверяет что UserID правильно сохраняется для text data
+func TestAddTextData_UserIDInCRDTEntry(t *testing.T) {
+	mockStorage := newMockCRDTStorage()
+	encKey := []byte("12345678901234567890123456789012")
+	nodeID := "test-node-id"
+	service := NewService(mockStorage, encKey, nodeID)
+
+	ctx := context.Background()
+	userID := "3b7ec8d1-8bfa-48af-b97e-ccfcf4c4b6cf"
+
+	textData := &models.TextData{
+		Name:    "Notes",
+		Content: "My secret notes",
+	}
+
+	err := service.AddTextData(ctx, userID, textData)
+	require.NoError(t, err)
+
+	// Проверяем что UserID сохранен в CRDT entry
+	assert.NotNil(t, mockStorage.lastSavedEntry)
+	assert.Equal(t, userID, mockStorage.lastSavedEntry.UserID)
+	assert.Equal(t, models.DataTypeText, mockStorage.lastSavedEntry.Type)
+	assert.Contains(t, mockStorage.lastSavedEntry.UserID, "-") // UUID формат
+}
+
+// TestAddBinaryData_UserIDInCRDTEntry проверяет что UserID правильно сохраняется для binary data
+func TestAddBinaryData_UserIDInCRDTEntry(t *testing.T) {
+	mockStorage := newMockCRDTStorage()
+	encKey := []byte("12345678901234567890123456789012")
+	nodeID := "test-node-id"
+	service := NewService(mockStorage, encKey, nodeID)
+
+	ctx := context.Background()
+	userID := "4c8fd9e2-9cga-59bg-c08f-ddfdf5d5c7dg"
+
+	binaryData := &models.BinaryData{
+		Name:     "document.pdf",
+		MimeType: "application/pdf",
+		Data:     []byte("fake pdf content"),
+	}
+
+	err := service.AddBinaryData(ctx, userID, binaryData)
+	require.NoError(t, err)
+
+	// Проверяем что UserID сохранен в CRDT entry
+	assert.NotNil(t, mockStorage.lastSavedEntry)
+	assert.Equal(t, userID, mockStorage.lastSavedEntry.UserID)
+	assert.Equal(t, models.DataTypeBinary, mockStorage.lastSavedEntry.Type)
+	assert.Contains(t, mockStorage.lastSavedEntry.UserID, "-") // UUID формат
+}
+
+// TestAddCardData_UserIDInCRDTEntry проверяет что UserID правильно сохраняется для card data
+func TestAddCardData_UserIDInCRDTEntry(t *testing.T) {
+	mockStorage := newMockCRDTStorage()
+	encKey := []byte("12345678901234567890123456789012")
+	nodeID := "test-node-id"
+	service := NewService(mockStorage, encKey, nodeID)
+
+	ctx := context.Background()
+	userID := "5d9ge0f3-0dha-60ch-d19g-eegeg6e6d8eh"
+
+	cardData := &models.CardData{
+		Name:   "Bank Card",
+		Number: "4111111111111111",
+		Holder: "John Doe",
+		CVV:    "123",
+		Expiry: "12/25",
+	}
+
+	err := service.AddCardData(ctx, userID, cardData)
+	require.NoError(t, err)
+
+	// Проверяем что UserID сохранен в CRDT entry
+	assert.NotNil(t, mockStorage.lastSavedEntry)
+	assert.Equal(t, userID, mockStorage.lastSavedEntry.UserID)
+	assert.Equal(t, models.DataTypeCard, mockStorage.lastSavedEntry.Type)
+	assert.Contains(t, mockStorage.lastSavedEntry.UserID, "-") // UUID формат
+}
+
+// TestAllDataTypes_UserIDNotUsername проверяет что все типы используют UserID а не Username
+// Комплексный регрессионный тест для бага из add.go
+func TestAllDataTypes_UserIDNotUsername(t *testing.T) {
+	mockStorage := newMockCRDTStorage()
+	encKey := []byte("12345678901234567890123456789012")
+	service := NewService(mockStorage, encKey, "test-node")
+
+	ctx := context.Background()
+
+	// Эмулируем реальную ситуацию: есть username и UserID
+	username := "test2"
+	userID := "2afeb7d9-7aea-47af-a96e-bbfbf3b3a5bf" // UUID из реального бага
+
+	tests := []struct {
+		addFunc  func() error
+		name     string
+		dataType string
+	}{
+		{
+			name:     "Credential",
+			dataType: models.DataTypeCredential,
+			addFunc: func() error {
+				return service.AddCredential(ctx, userID, &models.Credential{
+					Name:     "Test",
+					Login:    "user",
+					Password: "pass",
+				})
+			},
+		},
+		{
+			name:     "TextData",
+			dataType: models.DataTypeText,
+			addFunc: func() error {
+				return service.AddTextData(ctx, userID, &models.TextData{
+					Name:    "Note",
+					Content: "content",
+				})
+			},
+		},
+		{
+			name:     "BinaryData",
+			dataType: models.DataTypeBinary,
+			addFunc: func() error {
+				return service.AddBinaryData(ctx, userID, &models.BinaryData{
+					Name:     "file.txt",
+					MimeType: "text/plain",
+					Data:     []byte("data"),
+				})
+			},
+		},
+		{
+			name:     "CardData",
+			dataType: models.DataTypeCard,
+			addFunc: func() error {
+				return service.AddCardData(ctx, userID, &models.CardData{
+					Name:   "Card",
+					Number: "4111111111111111",
+					Holder: "John Doe",
+					CVV:    "123",
+					Expiry: "12/25",
+				})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Очищаем mock перед каждым тестом
+			mockStorage.lastSavedEntry = nil
+
+			err := tt.addFunc()
+			require.NoError(t, err)
+
+			// КРИТИЧЕСКАЯ ПРОВЕРКА: UserID должен быть UUID, а НЕ username
+			require.NotNil(t, mockStorage.lastSavedEntry)
+			assert.Equal(t, userID, mockStorage.lastSavedEntry.UserID,
+				"Expected UserID (UUID) but got something else for %s", tt.dataType)
+			assert.NotEqual(t, username, mockStorage.lastSavedEntry.UserID,
+				"UserID should NOT be username for %s", tt.dataType)
+			assert.Contains(t, mockStorage.lastSavedEntry.UserID, "-",
+				"UserID should be in UUID format (with dashes) for %s", tt.dataType)
+			assert.Equal(t, tt.dataType, mockStorage.lastSavedEntry.Type)
+		})
+	}
+}

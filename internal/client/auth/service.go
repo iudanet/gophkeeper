@@ -108,6 +108,7 @@ func (s *Service) Register(ctx context.Context, username, masterPassword string)
 
 // LoginResult содержит результат авторизации
 type LoginResult struct {
+	UserID        string // User UUID from server
 	AccessToken   string
 	RefreshToken  string
 	Username      string
@@ -165,6 +166,7 @@ func (s *Service) Login(ctx context.Context, username, masterPassword string) (*
 
 	// 6. Возвращаем результат
 	return &LoginResult{
+		UserID:        resp.UserID,
 		AccessToken:   resp.AccessToken,
 		RefreshToken:  resp.RefreshToken,
 		ExpiresIn:     resp.ExpiresIn,

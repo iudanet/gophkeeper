@@ -43,6 +43,7 @@ func (c *Cli) runLogin(ctx context.Context) error {
 	// Сохраняем токены через слой шифрования
 	authData := &storage.AuthData{
 		Username:     result.Username,
+		UserID:       result.UserID,       // User UUID from server
 		NodeID:       result.NodeID,       // уникальный ID клиента для CRDT
 		AccessToken:  result.AccessToken,  // plaintext
 		RefreshToken: result.RefreshToken, // plaintext

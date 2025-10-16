@@ -230,6 +230,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		slog.String("user_id", user.ID))
 
 	resp := api.TokenResponse{
+		UserID:       user.ID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    expiresIn,
@@ -330,6 +331,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	h.logger.InfoContext(ctx, "tokens refreshed successfully", slog.String("user_id", user.ID))
 
 	resp := api.TokenResponse{
+		UserID:       user.ID,
 		AccessToken:  newAccessToken,
 		RefreshToken: newRefreshToken,
 		ExpiresIn:    expiresIn,

@@ -24,6 +24,8 @@ func main() {
 	showVersion := flag.Bool("version", false, "Show version information")
 	serverURL := flag.String("server", "http://localhost:8080", "Server URL")
 	dbPath := flag.String("db", "gophkeeper-client.db", "Path to local database")
+	masterPassword := flag.String("master-password", "", "Master password (use with caution, prefer env var or file)")
+	masterPasswordFile := flag.String("master-password-file", "", "Path to file containing master password")
 
 	flag.Parse()
 
@@ -58,11 +60,22 @@ func main() {
 	// Создаем API клиент
 	apiClient := api.NewClient(*serverURL)
 	commands := cli.New(apiClient, boltStorage)
-	errPass := commands.ReadMasterMasspwrd(ctx)
-	if errPass != nil {
-		fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
-		os.Exit(1)
+
+	// Получаем команду
+	command := args[0]
+
+	// Для register и login не нужен мастер-пароль (база ещё не создана)
+	needMasterPassword := command != "register" && command != "login"
+
+	if needMasterPassword {
+		// Передаем параметры мастер-пароля
+		errPass := commands.ReadMasterPassword(ctx, *masterPassword, *masterPasswordFile)
+		if errPass != nil {
+			fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
+			os.Exit(1)
+		}
 	}
+
 	commands.Run(ctx, args)
 }
 

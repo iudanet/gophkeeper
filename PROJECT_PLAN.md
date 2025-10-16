@@ -23,15 +23,14 @@
 ### Частично (3 фазы):
 - API (~70%) — ✅ auth handlers с тестами, sync endpoints готовы
 - Сервер (~70%) — ✅ Recovery/Logging/RateLimit middleware с тестами (100% coverage), ✅ auth handlers с тестами, ❌ отсутствует TLS
-- Клиент (~85%) — ✅ register/login/logout с шифрованием токенов, ✅ CRDT storage с тестами, ✅ data service с тестами, ✅ CLI: add/list/get/delete/sync для credentials, ✅ sync logic с тестами (90.4% coverage), ❌ text/binary/card types, ❌ client/api тесты
+- Клиент (~92%) — ✅ register/login/logout с шифрованием токенов, ✅ CRDT storage с тестами, ✅ data service с тестами, ✅ CLI: add/list/get/delete/sync для всех типов (credentials/text/binary/card), ✅ sync logic с тестами (90.4% coverage), ✅ client/api тесты (87.4% coverage), ❌ refresh token auto-renewal
 
 ### Не начато (4+ фаз):
 - Тестирование, документация, CI/CD, Docker, TLS конфигурация, client sync и др.
 
 ### Критические проблемы:
 - Отсутствует TLS (HTTPS)
-- Отсутствуют тесты для client/api модуля
-- Реализован только тип данных credential (нужны: text, binary, card)
+- Отсутствует автоматическое обновление access token через refresh token
 
 ---
 
@@ -58,6 +57,10 @@
 - **✅ Metadata Storage — сохранение lastSyncTimestamp для оптимизации синхронизации**
 - **✅ Server Middleware — Recovery, Logging, RateLimit с comprehensive тестами (100% coverage)**
 - **✅ RateLimit защита для auth endpoints (10 req/min для login/register/getSalt)**
+- **✅ Client API тесты — 14 comprehensive тестов для всех API методов (87.4% coverage)**
+- **✅ CLI commands для всех типов данных (credentials, text, binary, card) — add/list/get/delete**
+- **✅ Safe card number masking — защита от IndexOutOfRange для коротких номеров**
+- **✅ Binary file support — сохранение filename в metadata, MIME type detection**
 
 ---
 
@@ -71,7 +74,7 @@
 3. **Client-side**:
    - ✅ ~~Полная реализация sync logic (fetch, merge, push)~~ (ЗАВЕРШЕНО - 90.4% coverage)
    - ✅ ~~CLI команды управления credentials: add, list, get, delete, sync~~ (ЗАВЕРШЕНО)
-   - CLI команды для других типов данных: text, binary, card
+   - ✅ ~~CLI команды для других типов данных: text, binary, card~~ (ЗАВЕРШЕНО)
    - Автоматическое обновление access token (refresh)
    - ✅ ~~Хранение токенов в BoltDB с шифрованием~~ (ЗАВЕРШЕНО)
    - ✅ ~~CRDT Storage (BoltDB) с 9 методами~~ (ЗАВЕРШЕНО)
@@ -80,7 +83,7 @@
 4. **Расширение тестового покрытия клиентских модулей** (>80%)
    - ✅ auth.AuthService тесты завершены (~90% coverage)
    - ✅ server auth handlers тесты завершены (82.5% coverage)
-   - ❌ client/api тесты отсутствуют
+   - ✅ **client/api тесты завершены** (client_test.go с 14 тестами: Register, GetSalt, Login, Logout, Sync — 87.4% coverage)
    - ✅ client/storage/boltdb тесты завершены (crdt_test.go с comprehensive тестами)
    - ✅ **client/data тесты завершены** (service_test.go с 20+ тестами: AddCredential, GetCredential, ListCredentials, DeleteCredential, шифрование/дешифрование, edge cases, ошибки)
    - ✅ **client/sync тесты завершены** (service_test.go с 10 comprehensive тестами: push, pull, merge, CRDT conflicts, errors — 90.4% coverage)
@@ -103,7 +106,7 @@
 | 6 | ✅ Разработать клиентскую sync логику (fetch, merge, push) | **Завершено** (90.4% coverage) |
 | 7 | ✅ Реализовать client auth storage с шифрованием | **Завершено** (90% coverage) |
 | 8 | ✅ Добавить CLI команды: logout, status | **Завершено** |
-| 9 | Расширить тесты клиентской части (auth, api, storage, data) | Частично (auth ✅, storage ✅, data ✅, api ❌) |
+| 9 | Расширить тесты клиентской части (auth, api, storage, data) | **Завершено** (auth ✅, storage ✅, data ✅, api ✅ 87.4% coverage) |
 | 10 | Обновить конфигурацию (env и config.yaml) | Частично |
 | 11 | Создать документацию и пример использования | Не сделано |
 | 12 | Настроить CI/CD, сборку, Docker | Не сделано |

@@ -26,6 +26,7 @@ type LoginRequest struct {
 
 // TokenResponse представляет ответ с токенами доступа
 type TokenResponse struct {
+	UserID       string `json:"user_id"`       // User UUID
 	AccessToken  string `json:"access_token"`  // JWT access token
 	RefreshToken string `json:"refresh_token"` // refresh token
 	ExpiresIn    int64  `json:"expires_in"`    // время жизни access token в секундах
