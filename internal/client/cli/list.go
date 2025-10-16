@@ -17,11 +17,11 @@ func (c *Cli) runList(ctx context.Context, args []string) error {
 	case "credentials", "credential":
 		return c.runListCredentials(ctx)
 	case "text":
-		return fmt.Errorf("'list text' not implemented yet")
+		return c.runListText(ctx)
 	case "binary":
-		return fmt.Errorf("'list binary' not implemented yet")
+		return c.runListBinary(ctx)
 	case "card", "cards":
-		return fmt.Errorf("'list cards' not implemented yet")
+		return c.runListCards(ctx)
 	default:
 		return fmt.Errorf("unknown data type: %s. Use: credentials, text, binary, or card", dataType)
 	}
@@ -60,6 +60,118 @@ func (c *Cli) runListCredentials(ctx context.Context) error {
 	}
 
 	fmt.Println("Note: Passwords are hidden for security. Use 'gophkeeper get <id>' to view full details.")
+
+	return nil
+}
+
+func (c *Cli) runListText(ctx context.Context) error {
+	fmt.Println("=== Saved Text Data ===")
+
+	// Получаем список text data через data service
+	textData, err := c.dataService.ListTextData(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list text data: %w", err)
+	}
+
+	if len(textData) == 0 {
+		fmt.Println("No text data found.")
+		fmt.Println()
+		fmt.Println("Use 'gophkeeper add text' to add your first text entry.")
+		return nil
+	}
+
+	fmt.Printf("Found %d text entry(ies):\n", len(textData))
+	fmt.Println()
+
+	for i, text := range textData {
+		fmt.Printf("%d. %s\n", i+1, text.Name)
+		fmt.Printf("   ID:      %s\n", text.ID)
+		// Показываем первые 50 символов содержимого
+		preview := text.Content
+		if len(preview) > 50 {
+			preview = preview[:50] + "..."
+		}
+		fmt.Printf("   Preview: %s\n", preview)
+		fmt.Println()
+	}
+
+	fmt.Println("Use 'gophkeeper get <id>' to view full content.")
+
+	return nil
+}
+
+func (c *Cli) runListBinary(ctx context.Context) error {
+	fmt.Println("=== Saved Binary Data ===")
+
+	// Получаем список binary data через data service
+	binaryData, err := c.dataService.ListBinaryData(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list binary data: %w", err)
+	}
+
+	if len(binaryData) == 0 {
+		fmt.Println("No binary data found.")
+		fmt.Println()
+		fmt.Println("Use 'gophkeeper add binary' to add your first binary file.")
+		return nil
+	}
+
+	fmt.Printf("Found %d binary file(s):\n", len(binaryData))
+	fmt.Println()
+
+	for i, binary := range binaryData {
+		fmt.Printf("%d. %s\n", i+1, binary.Name)
+		fmt.Printf("   ID:       %s\n", binary.ID)
+		if filename, ok := binary.Metadata.CustomFields["filename"]; ok {
+			fmt.Printf("   Filename: %s\n", filename)
+		}
+		fmt.Printf("   Size:     %d bytes\n", len(binary.Data))
+		if binary.MimeType != "" {
+			fmt.Printf("   Type:     %s\n", binary.MimeType)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("Use 'gophkeeper get <id>' to download the file.")
+
+	return nil
+}
+
+func (c *Cli) runListCards(ctx context.Context) error {
+	fmt.Println("=== Saved Card Data ===")
+
+	// Получаем список card data через data service
+	cardData, err := c.dataService.ListCardData(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list card data: %w", err)
+	}
+
+	if len(cardData) == 0 {
+		fmt.Println("No card data found.")
+		fmt.Println()
+		fmt.Println("Use 'gophkeeper add card' to add your first card.")
+		return nil
+	}
+
+	fmt.Printf("Found %d card(s):\n", len(cardData))
+	fmt.Println()
+
+	for i, card := range cardData {
+		fmt.Printf("%d. %s\n", i+1, card.Name)
+		fmt.Printf("   ID:     %s\n", card.ID)
+		// Маскируем номер карты (показываем только последние 4 цифры)
+		maskedNumber := maskCardNumber(card.Number)
+		fmt.Printf("   Number: %s\n", maskedNumber)
+		if card.Holder != "" {
+			fmt.Printf("   Holder: %s\n", card.Holder)
+		}
+		if card.Expiry != "" {
+			fmt.Printf("   Expiry: %s\n", card.Expiry)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("Note: Card details are masked. Use 'gophkeeper get <id>' to view full details.")
 
 	return nil
 }

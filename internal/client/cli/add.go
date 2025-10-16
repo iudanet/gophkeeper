@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/iudanet/gophkeeper/internal/models"
 )
@@ -21,7 +23,7 @@ func (c *Cli) runAdd(ctx context.Context, args []string) error {
 	case "text":
 		return c.runAddText(ctx)
 	case "binary":
-		return fmt.Errorf("'add binary' not fully implemented yet. Use: gophkeeper add text for now")
+		return c.runAddBinary(ctx)
 	case "card":
 		return c.runAddCard(ctx)
 	default:
@@ -201,6 +203,82 @@ func (c *Cli) runAddCard(ctx context.Context) error {
 	fmt.Printf("Name: %s\n", name)
 	fmt.Println()
 	fmt.Println("Note: Card is stored locally. Run 'gophkeeper sync' to sync with server.")
+
+	return nil
+}
+
+func (c *Cli) runAddBinary(ctx context.Context) error {
+	fmt.Println("=== Add Binary Data ===")
+	fmt.Println()
+	fmt.Println("Enter binary file details:")
+	fmt.Println()
+
+	name, err := readInput("Name (e.g., 'Passport Scan'): ")
+	if err != nil || name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+
+	filepath, err := readInput("File path: ")
+	if err != nil || filepath == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+
+	// Читаем файл
+	content, err := os.ReadFile(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Получаем имя файла
+	filename := filepath
+	if strings.Contains(filepath, "/") {
+		parts := strings.Split(filepath, "/")
+		filename = parts[len(parts)-1]
+	} else if strings.Contains(filepath, "\\") {
+		parts := strings.Split(filepath, "\\")
+		filename = parts[len(parts)-1]
+	}
+
+	// Определяем MIME type (простая имплементация)
+	mimeType := ""
+	if strings.HasSuffix(filename, ".pdf") {
+		mimeType = "application/pdf"
+	} else if strings.HasSuffix(filename, ".jpg") || strings.HasSuffix(filename, ".jpeg") {
+		mimeType = "image/jpeg"
+	} else if strings.HasSuffix(filename, ".png") {
+		mimeType = "image/png"
+	} else if strings.HasSuffix(filename, ".txt") {
+		mimeType = "text/plain"
+	}
+
+	binaryData := &models.BinaryData{
+		Name:     name,
+		MimeType: mimeType,
+		Data:     content,
+		Metadata: models.Metadata{
+			Favorite: false,
+			Tags:     []string{},
+			CustomFields: map[string]string{
+				"filename": filename, // Сохраняем оригинальное имя файла в метаданных
+			},
+		},
+	}
+
+	userID := c.authData.Username
+
+	if err := c.dataService.AddBinaryData(ctx, userID, binaryData); err != nil {
+		return fmt.Errorf("failed to add binary data: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ File added successfully!")
+	fmt.Printf("Name:     %s\n", name)
+	if filename, ok := binaryData.Metadata.CustomFields["filename"]; ok {
+		fmt.Printf("Filename: %s\n", filename)
+	}
+	fmt.Printf("Size:     %d bytes\n", len(content))
+	fmt.Println()
+	fmt.Println("Note: File is stored locally. Run 'gophkeeper sync' to sync with server.")
 
 	return nil
 }
