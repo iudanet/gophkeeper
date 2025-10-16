@@ -139,26 +139,6 @@ func (c *Cli) runAddCredential(ctx context.Context) error {
 func (c *Cli) runAddText(ctx context.Context) error {
 	fmt.Println("=== Add Text Data ===")
 	fmt.Println()
-
-	authData, err := c.boltStorage.GetAuth(ctx)
-	if err != nil {
-		if err == storage.ErrAuthNotFound {
-			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
-		}
-		return fmt.Errorf("failed to get auth data: %w", err)
-	}
-
-	masterPassword, err := readPassword("Master password: ")
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
-	}
-
-	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
-	if err != nil {
-		return fmt.Errorf("failed to derive keys: %w", err)
-	}
-
-	fmt.Println()
 	fmt.Println("Enter text data details:")
 	fmt.Println()
 
@@ -181,9 +161,9 @@ func (c *Cli) runAddText(ctx context.Context) error {
 		},
 	}
 
-	userID := authData.Username
-	nodeID := fmt.Sprintf("%s-client", authData.Username)
-	dataService := data.NewService(c.boltStorage, keys.EncryptionKey, nodeID)
+	userID := c.authData.Username
+	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
+	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
 
 	if err := dataService.AddTextData(ctx, userID, textData); err != nil {
 		return fmt.Errorf("failed to add text data: %w", err)
@@ -200,26 +180,6 @@ func (c *Cli) runAddText(ctx context.Context) error {
 
 func (c *Cli) runAddCard(ctx context.Context) error {
 	fmt.Println("=== Add Card Data ===")
-	fmt.Println()
-
-	authData, err := c.boltStorage.GetAuth(ctx)
-	if err != nil {
-		if err == storage.ErrAuthNotFound {
-			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
-		}
-		return fmt.Errorf("failed to get auth data: %w", err)
-	}
-
-	masterPassword, err := readPassword("Master password: ")
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
-	}
-
-	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, authData.Username, authData.PublicSalt)
-	if err != nil {
-		return fmt.Errorf("failed to derive keys: %w", err)
-	}
-
 	fmt.Println()
 	fmt.Println("Enter card details:")
 	fmt.Println()
@@ -267,9 +227,9 @@ func (c *Cli) runAddCard(ctx context.Context) error {
 		},
 	}
 
-	userID := authData.Username
-	nodeID := fmt.Sprintf("%s-client", authData.Username)
-	dataService := data.NewService(c.boltStorage, keys.EncryptionKey, nodeID)
+	userID := c.authData.Username
+	nodeID := fmt.Sprintf("%s-client", c.authData.Username)
+	dataService := data.NewService(c.boltStorage, c.keys.EncryptionKey, nodeID)
 
 	if err := dataService.AddCardData(ctx, userID, cardData); err != nil {
 		return fmt.Errorf("failed to add card: %w", err)

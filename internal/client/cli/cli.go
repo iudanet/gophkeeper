@@ -2,19 +2,24 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"syscall"
 
 	"github.com/iudanet/gophkeeper/internal/client/api"
+	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
+	"github.com/iudanet/gophkeeper/internal/crypto"
 	"golang.org/x/term"
 )
 
 type Cli struct {
 	apiClient   *api.Client
 	boltStorage *boltdb.Storage
+	keys        *crypto.Keys
+	authData    *storage.AuthData
 }
 
 func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
@@ -22,6 +27,32 @@ func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
 		apiClient:   apiClient,
 		boltStorage: boltStorage,
 	}
+}
+
+func (c *Cli) ReadMasterMasspwrd(ctx context.Context) error {
+	// Проверяем авторизацию
+	authData, err := c.boltStorage.GetAuth(ctx)
+	if err != nil {
+		if err == storage.ErrAuthNotFound {
+			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
+		}
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+	c.authData = authData
+
+	// Запрашиваем master password для получения encryption_key
+	masterPassword, err := readPassword("Master password: ")
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Деривируем ключи
+	keys, err := crypto.DeriveKeysFromBase64Salt(masterPassword, c.authData.Username, c.authData.PublicSalt)
+	if err != nil {
+		return fmt.Errorf("failed to derive keys: %w", err)
+	}
+	c.keys = keys
+	return nil
 }
 
 func PrintUsage() {

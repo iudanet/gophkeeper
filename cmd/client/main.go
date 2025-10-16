@@ -58,6 +58,11 @@ func main() {
 	// Создаем API клиент
 	apiClient := api.NewClient(*serverURL)
 	commands := cli.New(apiClient, boltStorage)
+	errPass := commands.ReadMasterMasspwrd(ctx)
+	if errPass != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
+		os.Exit(1)
+	}
 	commands.Run(ctx, args)
 }
 
