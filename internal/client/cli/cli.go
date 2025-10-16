@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
@@ -205,7 +204,8 @@ func readInput(prompt string) (string, error) {
 // readPassword читает пароль без отображения на экране
 func readPassword(prompt string) (string, error) {
 	fmt.Print(prompt)
-	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	fd := int(os.Stdin.Fd()) // Получаем файловый дескриптор стандартного ввода
+	passwordBytes, err := term.ReadPassword(fd)
 	fmt.Println() // Переход на новую строку после ввода пароля
 	if err != nil {
 		return "", err
