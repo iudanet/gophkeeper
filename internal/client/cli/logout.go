@@ -14,7 +14,7 @@ func (c *Cli) runLogout(ctx context.Context) error {
 	authService := auth.NewService(c.apiClient, c.authService)
 
 	// Выполняем logout
-	if err := authService.Logout(ctx, ); err != nil {
+	if err := authService.Logout(ctx, c.encryptionKey); err != nil {
 		return fmt.Errorf("logout failed: %w", err)
 	}
 
