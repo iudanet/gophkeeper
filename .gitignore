@@ -57,3 +57,7 @@ build/
 # Client config (may contain sensitive data)
 .gophkeeper/
 gophkeeper.yaml
+
+
+client
+server
