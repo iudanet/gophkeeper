@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/iudanet/gophkeeper/internal/models"
+	"github.com/iudanet/gophkeeper/internal/server/storage"
 	"github.com/iudanet/gophkeeper/pkg/api"
 )
 
@@ -29,8 +30,17 @@ func setupTestLogger() *slog.Logger {
 
 func TestSyncHandler_HandleSync_MethodNotAllowed(t *testing.T) {
 	logger := setupTestLogger()
-	storage := &mockDataStorage{}
-	handler := NewSyncHandler(logger, storage)
+
+	mockStorage := &storage.DataStorageMock{
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			return false, nil
+		},
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			return []*models.CRDTEntry{}, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/sync", nil)
 	ctx := context.WithValue(req.Context(), UserIDKey, "user123")
@@ -44,8 +54,17 @@ func TestSyncHandler_HandleSync_MethodNotAllowed(t *testing.T) {
 
 func TestSyncHandler_HandleSync_Unauthorized(t *testing.T) {
 	logger := setupTestLogger()
-	storage := &mockDataStorage{}
-	handler := NewSyncHandler(logger, storage)
+
+	mockStorage := &storage.DataStorageMock{
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			return false, nil
+		},
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			return []*models.CRDTEntry{}, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sync", nil)
 	// No user_id in context
@@ -58,11 +77,11 @@ func TestSyncHandler_HandleSync_Unauthorized(t *testing.T) {
 
 func TestSyncHandler_HandleGetSync_Success(t *testing.T) {
 	logger := setupTestLogger()
+	now := time.Now()
 
 	// Prepare test data
-	now := time.Now()
-	entries := []*models.CRDTEntry{
-		{
+	entries := map[string]*models.CRDTEntry{
+		"entry1": {
 			ID:        "entry1",
 			UserID:    "user123",
 			Type:      models.DataTypeCredential,
@@ -73,7 +92,7 @@ func TestSyncHandler_HandleGetSync_Success(t *testing.T) {
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		{
+		"entry2": {
 			ID:        "entry2",
 			UserID:    "user123",
 			Type:      models.DataTypeText,
@@ -86,8 +105,23 @@ func TestSyncHandler_HandleGetSync_Success(t *testing.T) {
 		},
 	}
 
-	storage := &mockDataStorage{entries: entries}
-	handler := NewSyncHandler(logger, storage)
+	mockStorage := &storage.DataStorageMock{
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			result := []*models.CRDTEntry{}
+			for _, entry := range entries {
+				if entry.UserID == userID && entry.Timestamp > since {
+					result = append(result, entry)
+				}
+			}
+			return result, nil
+		},
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			entries[entry.ID] = entry
+			return true, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	tests := []struct {
 		name          string
@@ -151,8 +185,17 @@ func TestSyncHandler_HandleGetSync_Success(t *testing.T) {
 
 func TestSyncHandler_HandleGetSync_InvalidSince(t *testing.T) {
 	logger := setupTestLogger()
-	storage := &mockDataStorage{}
-	handler := NewSyncHandler(logger, storage)
+
+	mockStorage := &storage.DataStorageMock{
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			return []*models.CRDTEntry{}, nil
+		},
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			return false, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sync?since=invalid", nil)
 	ctx := context.WithValue(req.Context(), UserIDKey, "user123")
@@ -169,8 +212,8 @@ func TestSyncHandler_HandlePostSync_Success(t *testing.T) {
 	now := time.Now()
 
 	// Prepare server-side entries
-	serverEntries := []*models.CRDTEntry{
-		{
+	entries := map[string]*models.CRDTEntry{
+		"server-entry1": {
 			ID:        "server-entry1",
 			UserID:    "user123",
 			Type:      models.DataTypeText,
@@ -183,8 +226,28 @@ func TestSyncHandler_HandlePostSync_Success(t *testing.T) {
 		},
 	}
 
-	storage := &mockDataStorage{entries: serverEntries}
-	handler := NewSyncHandler(logger, storage)
+	mockStorage := &storage.DataStorageMock{
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			// Simulate LWW logic: save if entry doesn't exist or has newer timestamp
+			existing, exists := entries[entry.ID]
+			if !exists || entry.Timestamp > existing.Timestamp {
+				entries[entry.ID] = entry
+				return true, nil
+			}
+			return false, nil
+		},
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			result := []*models.CRDTEntry{}
+			for _, entry := range entries {
+				if entry.UserID == userID && entry.Timestamp > since {
+					result = append(result, entry)
+				}
+			}
+			return result, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	// Prepare client request
 	clientEntries := []api.CRDTEntry{
@@ -253,7 +316,7 @@ func TestSyncHandler_HandlePostSync_Success(t *testing.T) {
 	assert.Equal(t, 0, response.Conflicts)
 
 	// Verify client entries were saved
-	assert.Len(t, storage.savedEntries, 2)
+	assert.Len(t, mockStorage.SaveEntryCalls(), 2)
 }
 
 func TestSyncHandler_HandlePostSync_Conflicts(t *testing.T) {
@@ -261,8 +324,8 @@ func TestSyncHandler_HandlePostSync_Conflicts(t *testing.T) {
 	now := time.Now()
 
 	// Prepare server-side entry with newer timestamp
-	serverEntries := []*models.CRDTEntry{
-		{
+	entries := map[string]*models.CRDTEntry{
+		"entry1": {
 			ID:        "entry1",
 			UserID:    "user123",
 			Type:      models.DataTypeCredential,
@@ -276,8 +339,28 @@ func TestSyncHandler_HandlePostSync_Conflicts(t *testing.T) {
 		},
 	}
 
-	storage := &mockDataStorage{entries: serverEntries}
-	handler := NewSyncHandler(logger, storage)
+	mockStorage := &storage.DataStorageMock{
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			// Simulate LWW logic: save if entry doesn't exist or has newer timestamp
+			existing, exists := entries[entry.ID]
+			if !exists || entry.Timestamp > existing.Timestamp {
+				entries[entry.ID] = entry
+				return true, nil
+			}
+			return false, nil
+		},
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			result := []*models.CRDTEntry{}
+			for _, entry := range entries {
+				if entry.UserID == userID && entry.Timestamp > since {
+					result = append(result, entry)
+				}
+			}
+			return result, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	// Client tries to send older version of same entry
 	clientEntries := []api.CRDTEntry{
@@ -319,13 +402,25 @@ func TestSyncHandler_HandlePostSync_Conflicts(t *testing.T) {
 	assert.Equal(t, 1, response.Conflicts)
 
 	// Server entry should remain unchanged
-	assert.Equal(t, []byte("server-data-newer"), serverEntries[0].Data)
+	assert.Equal(t, []byte("server-data-newer"), entries["entry1"].Data)
 }
 
 func TestSyncHandler_HandlePostSync_UserIDMismatch(t *testing.T) {
 	logger := setupTestLogger()
-	storage := &mockDataStorage{}
-	handler := NewSyncHandler(logger, storage)
+
+	entries := make(map[string]*models.CRDTEntry)
+
+	mockStorage := &storage.DataStorageMock{
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			entries[entry.ID] = entry
+			return true, nil
+		},
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			return []*models.CRDTEntry{}, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	now := time.Now()
 	clientEntries := []api.CRDTEntry{
@@ -362,8 +457,17 @@ func TestSyncHandler_HandlePostSync_UserIDMismatch(t *testing.T) {
 
 func TestSyncHandler_HandlePostSync_InvalidJSON(t *testing.T) {
 	logger := setupTestLogger()
-	storage := &mockDataStorage{}
-	handler := NewSyncHandler(logger, storage)
+
+	mockStorage := &storage.DataStorageMock{
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			return false, nil
+		},
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			return []*models.CRDTEntry{}, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", bytes.NewReader([]byte("invalid json")))
 	ctx := context.WithValue(req.Context(), UserIDKey, "user123")
@@ -379,8 +483,8 @@ func TestSyncHandler_HandlePostSync_EmptyEntries(t *testing.T) {
 	logger := setupTestLogger()
 	now := time.Now()
 
-	serverEntries := []*models.CRDTEntry{
-		{
+	entries := map[string]*models.CRDTEntry{
+		"server-entry1": {
 			ID:        "server-entry1",
 			UserID:    "user123",
 			Type:      models.DataTypeText,
@@ -393,8 +497,23 @@ func TestSyncHandler_HandlePostSync_EmptyEntries(t *testing.T) {
 		},
 	}
 
-	storage := &mockDataStorage{entries: serverEntries}
-	handler := NewSyncHandler(logger, storage)
+	mockStorage := &storage.DataStorageMock{
+		SaveEntryFunc: func(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
+			entries[entry.ID] = entry
+			return true, nil
+		},
+		GetUserEntriesSinceFunc: func(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
+			result := []*models.CRDTEntry{}
+			for _, entry := range entries {
+				if entry.UserID == userID && entry.Timestamp > since {
+					result = append(result, entry)
+				}
+			}
+			return result, nil
+		},
+	}
+
+	handler := NewSyncHandler(logger, mockStorage)
 
 	// Client sends empty entries list
 	syncRequest := api.SyncRequest{
@@ -421,5 +540,5 @@ func TestSyncHandler_HandlePostSync_EmptyEntries(t *testing.T) {
 	// Should still return server entries
 	assert.Len(t, response.Entries, 1)
 	assert.Equal(t, 0, response.Conflicts)
-	assert.Empty(t, storage.savedEntries)
+	assert.Empty(t, mockStorage.SaveEntryCalls())
 }
