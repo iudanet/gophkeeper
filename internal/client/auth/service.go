@@ -14,6 +14,8 @@ import (
 	pkgapi "github.com/iudanet/gophkeeper/pkg/api"
 )
 
+//go:generate moq -out apiclient_mock.go . APIClient
+
 // APIClient определяет интерфейс для HTTP коммуникации с сервером
 type APIClient interface {
 	Register(ctx context.Context, req pkgapi.RegisterRequest) (*pkgapi.RegisterResponse, error)

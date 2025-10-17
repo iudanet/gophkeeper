@@ -2,7 +2,7 @@ package storage
 
 import "context"
 
-//go:generate moq -out metafata_mock.go . MetadataStorage
+//go:generate moq -out metadata_mock.go . MetadataStorage
 
 // MetadataStorage defines interface for storing client metadata
 type MetadataStorage interface {

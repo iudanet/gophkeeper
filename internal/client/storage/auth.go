@@ -4,6 +4,8 @@ import (
 	"context"
 )
 
+//go:generate moq -out authstorage_mock.go . AuthStorage
+
 // AuthStorage defines interface for storing authentication data on client
 // This is the lowest storage layer - it works with raw data (already encrypted tokens)
 // and doesn't perform any encryption/decryption itself.

@@ -13,69 +13,8 @@ import (
 	pkgapi "github.com/iudanet/gophkeeper/pkg/api"
 )
 
-// mockAuthStorage implements storage.AuthStorage for testing
-type mockAuthStorage struct {
-	data        *storage.AuthData
-	saveErr     error
-	getErr      error
-	deleteErr   error
-	isAuthErr   error
-	isAuthValue bool
-}
-
-func (m *mockAuthStorage) SaveAuth(ctx context.Context, auth *storage.AuthData) error {
-	if m.saveErr != nil {
-		return m.saveErr
-	}
-	// Сохраняем копию данных
-	m.data = &storage.AuthData{
-		Username:     auth.Username,
-		UserID:       auth.UserID,
-		NodeID:       auth.NodeID,
-		AccessToken:  auth.AccessToken,
-		RefreshToken: auth.RefreshToken,
-		PublicSalt:   auth.PublicSalt,
-		ExpiresAt:    auth.ExpiresAt,
-	}
-	return nil
-}
-
-func (m *mockAuthStorage) GetAuth(ctx context.Context) (*storage.AuthData, error) {
-	if m.getErr != nil {
-		return nil, m.getErr
-	}
-	if m.data == nil {
-		return nil, storage.ErrAuthNotFound
-	}
-	// Возвращаем копию
-	return &storage.AuthData{
-		Username:     m.data.Username,
-		UserID:       m.data.UserID,
-		NodeID:       m.data.NodeID,
-		AccessToken:  m.data.AccessToken,
-		RefreshToken: m.data.RefreshToken,
-		PublicSalt:   m.data.PublicSalt,
-		ExpiresAt:    m.data.ExpiresAt,
-	}, nil
-}
-
-func (m *mockAuthStorage) DeleteAuth(ctx context.Context) error {
-	if m.deleteErr != nil {
-		return m.deleteErr
-	}
-	m.data = nil
-	return nil
-}
-
-func (m *mockAuthStorage) IsAuthenticated(ctx context.Context) (bool, error) {
-	if m.isAuthErr != nil {
-		return false, m.isAuthErr
-	}
-	return m.isAuthValue, nil
-}
-
 func TestNewAuthService(t *testing.T) {
-	mockStorage := &mockAuthStorage{}
+	mockStorage := &storage.AuthStorageMock{}
 
 	authService := NewAuthService(nil, mockStorage)
 
@@ -110,44 +49,71 @@ func TestAuthService_SaveAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStorage := &mockAuthStorage{}
+			// Переменная для хранения сохранённых данных внутри мока
+			var savedData *storage.AuthData
+
+			mockStorage := &storage.AuthStorageMock{
+				SaveAuthFunc: func(ctx context.Context, auth *storage.AuthData) error {
+					savedData = auth
+					return nil
+				},
+				GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+					if savedData == nil {
+						return nil, storage.ErrAuthNotFound
+					}
+					return savedData, nil
+				},
+			}
+
 			encryptionKey := make([]byte, 32)
 			authService := NewAuthService(nil, mockStorage)
 			authService.SetEncryptionKey(encryptionKey)
 
 			err := authService.SaveAuth(context.Background(), tt.auth)
-
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
 			}
 
 			require.NoError(t, err)
+			require.NotNil(t, savedData)
 
-			// Проверяем, что данные были сохранены
-			assert.NotNil(t, mockStorage.data)
-			// Проверяем, что plaintext поля сохранились как есть
-			assert.Equal(t, tt.auth.Username, mockStorage.data.Username)
-			assert.Equal(t, tt.auth.UserID, mockStorage.data.UserID)
-			assert.Equal(t, tt.auth.PublicSalt, mockStorage.data.PublicSalt)
-			assert.Equal(t, tt.auth.ExpiresAt, mockStorage.data.ExpiresAt)
+			// Проверяем, что plaintext поля сохранились корректно
+			assert.Equal(t, tt.auth.Username, savedData.Username)
+			assert.Equal(t, tt.auth.UserID, savedData.UserID)
+			assert.Equal(t, tt.auth.PublicSalt, savedData.PublicSalt)
+			assert.Equal(t, tt.auth.ExpiresAt, savedData.ExpiresAt)
 
-			// Проверяем, что токены были зашифрованы (не равны plaintext)
-			assert.NotEqual(t, tt.auth.AccessToken, mockStorage.data.AccessToken)
-			assert.NotEqual(t, tt.auth.RefreshToken, mockStorage.data.RefreshToken)
+			// Проверяем, что токены были зашифрованы (не равны исходным plaintext)
+			assert.NotEqual(t, tt.auth.AccessToken, savedData.AccessToken)
+			assert.NotEqual(t, tt.auth.RefreshToken, savedData.RefreshToken)
 		})
 	}
 }
 
 func TestAuthService_GetAuth(t *testing.T) {
-	mockStorage := &mockAuthStorage{}
+	var savedData *storage.AuthData
+
+	mockStorage := &storage.AuthStorageMock{
+		SaveAuthFunc: func(ctx context.Context, auth *storage.AuthData) error {
+			savedData = auth
+			return nil
+		},
+		GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+			if savedData == nil {
+				return nil, storage.ErrAuthNotFound
+			}
+			return savedData, nil
+		},
+	}
+
 	encryptionKey := make([]byte, 32)
 	authService := NewAuthService(nil, mockStorage)
 	authService.SetEncryptionKey(encryptionKey)
 
 	ctx := context.Background()
 
-	// Сначала сохраняем данные
+	// Сначала сохраняем данные (SaveAuth вызывает SaveAuthFunc в мокe)
 	originalAuth := &storage.AuthData{
 		Username:     "testuser",
 		UserID:       "user-123",
@@ -160,7 +126,7 @@ func TestAuthService_GetAuth(t *testing.T) {
 	err := authService.SaveAuth(ctx, originalAuth)
 	require.NoError(t, err)
 
-	// Теперь получаем данные обратно
+	// Теперь получаем данные обратно (GetAuthDecryptData вызывает GetAuthFunc мока)
 	retrievedAuth, err := authService.GetAuthDecryptData(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, retrievedAuth)
@@ -177,7 +143,12 @@ func TestAuthService_GetAuth(t *testing.T) {
 }
 
 func TestAuthService_GetAuth_NotFound(t *testing.T) {
-	mockStorage := &mockAuthStorage{}
+	mockStorage := &storage.AuthStorageMock{
+		GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+			return nil, storage.ErrAuthNotFound
+		},
+	}
+
 	encryptionKey := make([]byte, 32)
 	authService := NewAuthService(nil, mockStorage)
 	authService.SetEncryptionKey(encryptionKey)
@@ -188,16 +159,33 @@ func TestAuthService_GetAuth_NotFound(t *testing.T) {
 	assert.Equal(t, storage.ErrAuthNotFound, err)
 	assert.Nil(t, retrievedAuth)
 }
-
 func TestAuthService_DeleteAuth(t *testing.T) {
-	mockStorage := &mockAuthStorage{}
+	// Переменная для имитации сохранённого состояния
+	var storedData *storage.AuthData
+
+	mockStorage := &storage.AuthStorageMock{
+		SaveAuthFunc: func(ctx context.Context, auth *storage.AuthData) error {
+			storedData = auth
+			return nil
+		},
+		GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+			if storedData == nil {
+				return nil, storage.ErrAuthNotFound
+			}
+			return storedData, nil
+		},
+		DeleteAuthFunc: func(ctx context.Context) error {
+			storedData = nil
+			return nil
+		},
+	}
+
 	encryptionKey := make([]byte, 32)
 	authService := NewAuthService(nil, mockStorage)
 	authService.SetEncryptionKey(encryptionKey)
-
 	ctx := context.Background()
 
-	// Сначала сохраняем данные
+	// Сохраняем auth данные перед удалением
 	auth := &storage.AuthData{
 		Username:     "testuser",
 		AccessToken:  "token",
@@ -209,12 +197,15 @@ func TestAuthService_DeleteAuth(t *testing.T) {
 	err := authService.SaveAuth(ctx, auth)
 	require.NoError(t, err)
 
-	// Удаляем
+	// Убеждаемся, что данные сохранены
+	require.NotNil(t, storedData)
+
+	// Вызываем DeleteAuth
 	err = authService.DeleteAuth(ctx)
 	require.NoError(t, err)
 
-	// Проверяем, что данных больше нет
-	assert.Nil(t, mockStorage.data)
+	// Проверяем, что данные были удалены
+	assert.Nil(t, storedData)
 }
 
 func TestAuthService_IsAuthenticated(t *testing.T) {
@@ -239,14 +230,23 @@ func TestAuthService_IsAuthenticated(t *testing.T) {
 			want:        false,
 			wantErr:     false,
 		},
+		{
+			name:        "error from storage",
+			isAuthValue: false,
+			isAuthErr:   fmt.Errorf("storage error"),
+			want:        false,
+			wantErr:     true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStorage := &mockAuthStorage{
-				isAuthValue: tt.isAuthValue,
-				isAuthErr:   tt.isAuthErr,
+			mockStorage := &storage.AuthStorageMock{
+				IsAuthenticatedFunc: func(ctx context.Context) (bool, error) {
+					return tt.isAuthValue, tt.isAuthErr
+				},
 			}
+
 			authService := NewAuthService(nil, mockStorage)
 
 			got, err := authService.IsAuthenticated(context.Background())
@@ -255,7 +255,6 @@ func TestAuthService_IsAuthenticated(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
@@ -263,19 +262,32 @@ func TestAuthService_IsAuthenticated(t *testing.T) {
 }
 
 func TestAuthService_EncryptionDecryption_RoundTrip(t *testing.T) {
-	// Тест проверяет полный цикл шифрования-дешифрования
-	mockStorage := &mockAuthStorage{}
+	// Переменная для хранения состояния auth данных внутри мока
+	var storedData *storage.AuthData
+
+	mockStorage := &storage.AuthStorageMock{
+		SaveAuthFunc: func(ctx context.Context, auth *storage.AuthData) error {
+			storedData = auth
+			return nil
+		},
+		GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+			if storedData == nil {
+				return nil, storage.ErrAuthNotFound
+			}
+			return storedData, nil
+		},
+	}
+
 	encryptionKey := make([]byte, 32)
-	// Заполняем ключ тестовыми данными
 	for i := range encryptionKey {
 		encryptionKey[i] = byte(i)
 	}
 
 	authService := NewAuthService(nil, mockStorage)
 	authService.SetEncryptionKey(encryptionKey)
+
 	ctx := context.Background()
 
-	// Тестовые данные с различными символами
 	testCases := []struct {
 		name         string
 		accessToken  string
@@ -309,15 +321,16 @@ func TestAuthService_EncryptionDecryption_RoundTrip(t *testing.T) {
 				ExpiresAt:    1234567890,
 			}
 
-			// Сохраняем
+			// Сохраняем данные (с шифрованием внутри SaveAuthFunc)
 			err := authService.SaveAuth(ctx, original)
 			require.NoError(t, err)
 
-			// Получаем обратно
+			// Получаем данные обратно, расшифровываем
 			retrieved, err := authService.GetAuthDecryptData(ctx)
 			require.NoError(t, err)
+			require.NotNil(t, retrieved)
 
-			// Проверяем полное совпадение
+			// Проверяем, что данные совпадают с оригиналом
 			assert.Equal(t, original.Username, retrieved.Username)
 			assert.Equal(t, original.UserID, retrieved.UserID)
 			assert.Equal(t, original.AccessToken, retrieved.AccessToken)
@@ -360,9 +373,20 @@ func (m *mockAPIClient) Logout(ctx context.Context, accessToken string) error {
 func TestAuthService_RefreshToken_Success(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup mock storage with existing auth data
-	mockStorage := &mockAuthStorage{}
-	encryptionKey := make([]byte, 32)
+	var savedData *storage.AuthData
+
+	mockStorage := &storage.AuthStorageMock{
+		SaveAuthFunc: func(ctx context.Context, auth *storage.AuthData) error {
+			savedData = auth
+			return nil
+		},
+		GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+			if savedData == nil {
+				return nil, storage.ErrAuthNotFound
+			}
+			return savedData, nil
+		},
+	}
 
 	// Создаём mock API client с успешным ответом
 	mockAPI := &mockAPIClient{
@@ -374,6 +398,7 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 		},
 	}
 
+	encryptionKey := make([]byte, 32)
 	authService := NewAuthService(mockAPI, mockStorage)
 	authService.SetEncryptionKey(encryptionKey)
 
@@ -398,6 +423,7 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 	// Проверяем, что токены были обновлены
 	updatedAuth, err := authService.GetAuthDecryptData(ctx)
 	require.NoError(t, err)
+	require.NotNil(t, updatedAuth)
 
 	assert.Equal(t, "new-access-token", updatedAuth.AccessToken)
 	assert.Equal(t, "new-refresh-token", updatedAuth.RefreshToken)
@@ -413,7 +439,7 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 func TestAuthService_RefreshToken_NoEncryptionKey(t *testing.T) {
 	ctx := context.Background()
 
-	mockStorage := &mockAuthStorage{}
+	mockStorage := &storage.AuthStorageMock{}
 	mockAPI := &mockAPIClient{}
 
 	authService := NewAuthService(mockAPI, mockStorage)
@@ -428,8 +454,12 @@ func TestAuthService_RefreshToken_NoEncryptionKey(t *testing.T) {
 func TestAuthService_RefreshToken_NoAuthData(t *testing.T) {
 	ctx := context.Background()
 
-	// Storage без данных
-	mockStorage := &mockAuthStorage{}
+	mockStorage := &storage.AuthStorageMock{
+		GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+			return nil, storage.ErrAuthNotFound
+		},
+	}
+
 	encryptionKey := make([]byte, 32)
 	mockAPI := &mockAPIClient{}
 
@@ -445,7 +475,21 @@ func TestAuthService_RefreshToken_NoAuthData(t *testing.T) {
 func TestAuthService_RefreshToken_APIError(t *testing.T) {
 	ctx := context.Background()
 
-	mockStorage := &mockAuthStorage{}
+	var savedData *storage.AuthData
+
+	mockStorage := &storage.AuthStorageMock{
+		SaveAuthFunc: func(ctx context.Context, auth *storage.AuthData) error {
+			savedData = auth
+			return nil
+		},
+		GetAuthFunc: func(ctx context.Context) (*storage.AuthData, error) {
+			if savedData == nil {
+				return nil, storage.ErrAuthNotFound
+			}
+			return savedData, nil
+		},
+	}
+
 	encryptionKey := make([]byte, 32)
 
 	// Mock API с ошибкой
