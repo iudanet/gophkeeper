@@ -13,6 +13,8 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
+//go:generate moq -out service_mock.go . Service
+
 // service определяет интерфейс для клиентского data сервиса
 type Service interface {
 	AddCredential(ctx context.Context, userID, nodeID string, encryptionKey []byte, cred *models.Credential) error
