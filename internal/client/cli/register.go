@@ -3,8 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-
-	"github.com/iudanet/gophkeeper/internal/client/auth"
 )
 
 func (c *Cli) runRegister(ctx context.Context) error {
@@ -36,11 +34,8 @@ func (c *Cli) runRegister(ctx context.Context) error {
 	fmt.Println()
 	fmt.Println("Registering user...")
 
-	// Создаем auth.Service (без authStore, т.к. еще нет encryption_key)
-	authService := auth.NewService(c.apiClient, nil)
-
-	// Регистрация
-	result, err := authService.Register(ctx, username, masterPassword)
+	// Регистрация через authService
+	result, err := c.authService.Register(ctx, username, masterPassword)
 	if err != nil {
 		return err
 	}

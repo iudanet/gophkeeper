@@ -3,7 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"mime"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/iudanet/gophkeeper/internal/models"
@@ -89,7 +92,7 @@ func (c *Cli) runAddCredential(ctx context.Context) error {
 	userID := c.authData.UserID
 
 	// Добавляем credential через data service
-	if err := c.dataService.AddCredential(ctx, userID, cred); err != nil {
+	if err := c.dataService.AddCredential(ctx, userID, c.authData.NodeID, c.encryptionKey, cred); err != nil {
 		return fmt.Errorf("failed to add credential: %w", err)
 	}
 
@@ -130,7 +133,7 @@ func (c *Cli) runAddText(ctx context.Context) error {
 
 	userID := c.authData.UserID
 
-	if err := c.dataService.AddTextData(ctx, userID, textData); err != nil {
+	if err := c.dataService.AddTextData(ctx, userID, c.authData.NodeID, c.encryptionKey, textData); err != nil {
 		return fmt.Errorf("failed to add text data: %w", err)
 	}
 
@@ -194,7 +197,7 @@ func (c *Cli) runAddCard(ctx context.Context) error {
 
 	userID := c.authData.UserID
 
-	if err := c.dataService.AddCardData(ctx, userID, cardData); err != nil {
+	if err := c.dataService.AddCardData(ctx, userID, c.authData.NodeID, c.encryptionKey, cardData); err != nil {
 		return fmt.Errorf("failed to add card: %w", err)
 	}
 
@@ -218,37 +221,26 @@ func (c *Cli) runAddBinary(ctx context.Context) error {
 		return fmt.Errorf("name cannot be empty")
 	}
 
-	filepath, err := readInput("File path: ")
-	if err != nil || filepath == "" {
+	filePath, err := readInput("File path: ")
+	if err != nil || filePath == "" {
 		return fmt.Errorf("file path cannot be empty")
 	}
 
 	// Читаем файл
-	content, err := os.ReadFile(filepath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Получаем имя файла
-	filename := filepath
-	if strings.Contains(filepath, "/") {
-		parts := strings.Split(filepath, "/")
-		filename = parts[len(parts)-1]
-	} else if strings.Contains(filepath, "\\") {
-		parts := strings.Split(filepath, "\\")
-		filename = parts[len(parts)-1]
-	}
+	// Получаем имя файла из пути
+	filename := filepath.Base(filePath)
 
-	// Определяем MIME type (простая имплементация)
-	mimeType := ""
-	if strings.HasSuffix(filename, ".pdf") {
-		mimeType = "application/pdf"
-	} else if strings.HasSuffix(filename, ".jpg") || strings.HasSuffix(filename, ".jpeg") {
-		mimeType = "image/jpeg"
-	} else if strings.HasSuffix(filename, ".png") {
-		mimeType = "image/png"
-	} else if strings.HasSuffix(filename, ".txt") {
-		mimeType = "text/plain"
+	// Определяем MIME type через пакет mime
+	ext := strings.ToLower(filepath.Ext(filename))
+	mimeType := mime.TypeByExtension(ext)
+
+	if mimeType == "" {
+		mimeType = http.DetectContentType(content)
 	}
 
 	binaryData := &models.BinaryData{
@@ -259,14 +251,14 @@ func (c *Cli) runAddBinary(ctx context.Context) error {
 			Favorite: false,
 			Tags:     []string{},
 			CustomFields: map[string]string{
-				"filename": filename, // Сохраняем оригинальное имя файла в метаданных
+				"filename": filename,
 			},
 		},
 	}
 
 	userID := c.authData.UserID
 
-	if err := c.dataService.AddBinaryData(ctx, userID, binaryData); err != nil {
+	if err := c.dataService.AddBinaryData(ctx, userID, c.authData.NodeID, c.encryptionKey, binaryData); err != nil {
 		return fmt.Errorf("failed to add binary data: %w", err)
 	}
 

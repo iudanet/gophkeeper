@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 
@@ -13,34 +14,29 @@ import (
 	pkgapi "github.com/iudanet/gophkeeper/pkg/api"
 )
 
-// AuthStore defines interface for storing authentication data with encryption
-// This layer is responsible for encrypting/decrypting tokens before saving to storage
-type AuthStore interface {
-	// SaveAuth encrypts and saves authentication data
-	SaveAuth(ctx context.Context, auth *storage.AuthData) error
-
-	// GetAuth retrieves and decrypts authentication data
-	GetAuth(ctx context.Context) (*storage.AuthData, error)
-
-	// DeleteAuth removes stored authentication data
-	DeleteAuth(ctx context.Context) error
-
-	// IsAuthenticated checks if valid authentication exists
-	IsAuthenticated(ctx context.Context) (bool, error)
+// AuthService предоставляет функции авторизации и управления сессией
+// Ключ шифрования устанавливается через SetEncryptionKey после успешного Login/Register
+type AuthService struct {
+	apiClient     *api.Client
+	storage       storage.AuthStorage
+	encryptionKey []byte // опциональный ключ шифрования (устанавливается после login)
 }
 
-// Service предоставляет функции авторизации
-type Service struct {
-	apiClient *api.Client
-	authStore AuthStore
-}
+// Compile-time check that AuthService implements Service
+var _ Service = (*AuthService)(nil)
 
-// NewService создает новый сервис авторизации
-func NewService(apiClient *api.Client, authStore AuthStore) *Service {
-	return &Service{
+// NewAuthService создает новый сервис авторизации
+func NewAuthService(apiClient *api.Client, storage storage.AuthStorage) *AuthService {
+	return &AuthService{
 		apiClient: apiClient,
-		authStore: authStore,
+		storage:   storage,
 	}
+}
+
+// SetEncryptionKey устанавливает ключ шифрования для работы с хранилищем
+// Должен быть вызван после успешного Login/Register
+func (s *AuthService) SetEncryptionKey(key []byte) {
+	s.encryptionKey = key
 }
 
 // RegisterResult содержит результат регистрации
@@ -54,7 +50,7 @@ type RegisterResult struct {
 
 // Register регистрирует нового пользователя
 // Возвращает результат с ключом шифрования для использования
-func (s *Service) Register(ctx context.Context, username, masterPassword string) (*RegisterResult, error) {
+func (s *AuthService) Register(ctx context.Context, username, masterPassword string) (*RegisterResult, error) {
 	// Валидация входных данных
 	if err := validation.ValidateUsername(username); err != nil {
 		return nil, fmt.Errorf("invalid username: %w", err)
@@ -120,7 +116,7 @@ type LoginResult struct {
 
 // Login выполняет аутентификацию пользователя
 // Возвращает результат с токенами и ключом шифрования
-func (s *Service) Login(ctx context.Context, username, masterPassword string) (*LoginResult, error) {
+func (s *AuthService) Login(ctx context.Context, username, masterPassword string) (*LoginResult, error) {
 	// Валидация username
 	if err := validation.ValidateUsername(username); err != nil {
 		return nil, fmt.Errorf("invalid username: %w", err)
@@ -177,40 +173,133 @@ func (s *Service) Login(ctx context.Context, username, masterPassword string) (*
 	}, nil
 }
 
+// SaveAuth сохраняет незашифрованные auth данные,
+// сервис сам зашифрует токены и передаст в хранилище
+func (s *AuthService) SaveAuth(ctx context.Context, auth *storage.AuthData) error {
+	if auth == nil {
+		return fmt.Errorf("auth data is nil")
+	}
+	if s.encryptionKey == nil {
+		return fmt.Errorf("encryption key not set, call SetEncryptionKey first")
+	}
+
+	// Шифруем токены
+	encryptedAccessToken, err := crypto.Encrypt([]byte(auth.AccessToken), s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt access token: %w", err)
+	}
+
+	encryptedRefreshToken, err := crypto.Encrypt([]byte(auth.RefreshToken), s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt refresh token: %w", err)
+	}
+
+	// Кодируем шифрованные токены в base64
+	authCopy := *auth // копируем структуру, чтобы не менять входящую
+	authCopy.AccessToken = base64.StdEncoding.EncodeToString(encryptedAccessToken)
+	authCopy.RefreshToken = base64.StdEncoding.EncodeToString(encryptedRefreshToken)
+	authCopy.ExpiresAt = auth.ExpiresAt
+
+	// Сохраняем в storage (уже с зашифрованными токенами)
+	return s.storage.SaveAuth(ctx, &authCopy)
+}
+
+// GetAuthDecryptData загружает данные из storage и расшифровывает токены
+func (s *AuthService) GetAuthDecryptData(ctx context.Context) (*storage.AuthData, error) {
+	if s.encryptionKey == nil {
+		return nil, fmt.Errorf("encryption key not set, call SetEncryptionKey first")
+	}
+
+	storedAuth, err := s.storage.GetAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Декодируем base64 из хранилища
+	encryptedAccessTokenBytes, err := base64.StdEncoding.DecodeString(storedAuth.AccessToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to base64 decode access token: %w", err)
+	}
+	encryptedRefreshTokenBytes, err := base64.StdEncoding.DecodeString(storedAuth.RefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to base64 decode refresh token: %w", err)
+	}
+
+	// Дешифруем
+	accessTokenBytes, err := crypto.Decrypt(encryptedAccessTokenBytes, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt access token: %w", err)
+	}
+	refreshTokenBytes, err := crypto.Decrypt(encryptedRefreshTokenBytes, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt refresh token: %w", err)
+	}
+
+	// Копируем все в новую структуру, возвращаем с расшифрованными токенами
+	auth := *storedAuth
+	auth.AccessToken = string(accessTokenBytes)
+	auth.RefreshToken = string(refreshTokenBytes)
+	auth.ExpiresAt = storedAuth.ExpiresAt
+
+	return &auth, nil
+}
+
+// GetAuthEncryptData загружает данные из storage БЕЗ расшифровки токенов
+// Используется для получения username и public salt без необходимости в ключе
+func (s *AuthService) GetAuthEncryptData(ctx context.Context) (*storage.AuthData, error) {
+	return s.storage.GetAuth(ctx)
+}
+
+// DeleteAuth удаляет данные
+func (s *AuthService) DeleteAuth(ctx context.Context) error {
+	return s.storage.DeleteAuth(ctx)
+}
+
+// IsAuthenticated проверяет валидность сохраненных данных по сроку действия токена
+func (s *AuthService) IsAuthenticated(ctx context.Context) (bool, error) {
+	return s.storage.IsAuthenticated(ctx)
+}
+
 // Logout выполняет выход из системы
 // Удаляет локальные данные авторизации и опционально уведомляет сервер
-func (s *Service) Logout(ctx context.Context) error {
+func (s *AuthService) Logout(ctx context.Context) error {
 	// 1. Пытаемся получить текущий access token для отправки серверу
-	authData, err := s.authStore.GetAuth(ctx)
-	if err != nil {
-		// Если данных нет, просто логируем и продолжаем
-		slog.Debug("no auth data found during logout", "error", err)
-	} else {
-		// 2. Пытаемся уведомить сервер о logout (best effort)
-		if logoutErr := s.apiClient.Logout(ctx, authData.AccessToken); logoutErr != nil {
+	// Используем расшифровку если ключ установлен
+	var accessToken string
+	if s.encryptionKey != nil {
+		authData, err := s.GetAuthDecryptData(ctx)
+		if err != nil {
+			// Если данных нет, просто логируем и продолжаем
+			slog.Debug("no auth data found during logout", "error", err)
+		} else {
+			accessToken = authData.AccessToken
+		}
+	}
+
+	// 2. Пытаемся уведомить сервер о logout (best effort)
+	if accessToken != "" {
+		if logoutErr := s.apiClient.Logout(ctx, accessToken); logoutErr != nil {
 			// Не прерываем процесс, если сервер недоступен
 			slog.Warn("failed to logout on server", "error", logoutErr)
 		}
 	}
 
 	// 3. Всегда удаляем локальные данные, даже если сервер недоступен
-	if err := s.authStore.DeleteAuth(ctx); err != nil {
+	if err := s.DeleteAuth(ctx); err != nil {
 		return fmt.Errorf("failed to delete local auth data: %w", err)
 	}
+
+	// 4. Очищаем ключ шифрования
+	s.encryptionKey = nil
 
 	return nil
 }
 
 // getOrCreateNodeID возвращает существующий NodeID или создает новый
 // NodeID должен быть уникальным для каждого физического клиента/устройства
-func (s *Service) getOrCreateNodeID(ctx context.Context) (string, error) {
-	// Если authStore не инициализирован (это первый login/register), создаем новый NodeID
-	if s.authStore == nil {
-		return uuid.New().String(), nil
-	}
-
+func (s *AuthService) getOrCreateNodeID(ctx context.Context) (string, error) {
 	// Проверяем есть ли уже сохраненный NodeID в auth data
-	authData, err := s.authStore.GetAuth(ctx)
+	authData, err := s.storage.GetAuth(ctx)
 	if err != nil {
 		// Если данных нет (первый login на этом устройстве), создаем новый NodeID
 		if err == storage.ErrAuthNotFound {

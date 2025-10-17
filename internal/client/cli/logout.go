@@ -3,18 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
-
-	"github.com/iudanet/gophkeeper/internal/client/auth"
 )
 
 func (c *Cli) runLogout(ctx context.Context) error {
 	fmt.Println("=== Logout ===")
 
-	// Создаем auth.Service с authStore
-	authService := auth.NewService(c.apiClient, c.authService)
-
-	// Выполняем logout
-	if err := authService.Logout(ctx); err != nil {
+	// Выполняем logout через authService
+	if err := c.authService.Logout(ctx); err != nil {
 		return fmt.Errorf("logout failed: %w", err)
 	}
 

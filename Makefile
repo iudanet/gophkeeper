@@ -63,7 +63,8 @@ fmt: ## Format code with gofmt, goimports, and fieldalignment
 	@goimports -w .
 	@echo "Running fieldalignment..."
 	@fieldalignment -fix ./...
-
+	@echo "Running golangci-lint..."
+	@golangci-lint fmt ./...
 lint: ## Run linters
 	@echo "Running go fmt..."
 	@$(GOFMT) ./...

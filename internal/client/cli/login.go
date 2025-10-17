@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 )
 
@@ -19,28 +18,26 @@ func (c *Cli) runLogin(ctx context.Context) error {
 		return fmt.Errorf("failed to read username: %w", err)
 	}
 
-	// Запрашиваем master password
-	masterPassword, err := readPassword("Master password: ")
+	// Получаем master password из различных источников
+	pass, err := c.getMasterPassword(*c.pass)
 	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
+		return fmt.Errorf("failed to get master password: %w", err)
 	}
-
+	// очищаем пароли так как больше ненадо
+	c.pass = nil
 	fmt.Println()
 	fmt.Println("Authenticating...")
 
-	// Создаем auth.Service (без authStore на этом этапе)
-	authService := auth.NewService(c.apiClient, nil)
-
-	// Логин
-	result, err := authService.Login(ctx, username, masterPassword)
+	// Логин через authService
+	result, err := c.authService.Login(ctx, username, pass)
 	if err != nil {
 		return err
 	}
 
-	// Теперь у нас есть encryption_key, создаем AuthService (слой шифрования)
-	authStore := auth.NewAuthService(c.boltStorage, result.EncryptionKey)
+	// Устанавливаем ключ шифрования в authService
+	c.authService.SetEncryptionKey(result.EncryptionKey)
 
-	// Сохраняем токены через слой шифрования
+	// Сохраняем токены через authService (теперь с установленным ключом)
 	authData := &storage.AuthData{
 		Username:     result.Username,
 		UserID:       result.UserID,       // User UUID from server
@@ -51,7 +48,7 @@ func (c *Cli) runLogin(ctx context.Context) error {
 		ExpiresAt:    time.Now().Unix() + result.ExpiresIn,
 	}
 
-	if err := authStore.SaveAuth(ctx, authData); err != nil {
+	if err := c.authService.SaveAuth(ctx, authData); err != nil {
 		return fmt.Errorf("failed to save auth data: %w", err)
 	}
 

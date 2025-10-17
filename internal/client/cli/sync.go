@@ -3,22 +3,18 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 	"time"
-
-	"github.com/iudanet/gophkeeper/internal/client/sync"
 )
 
 func (c *Cli) runSync(ctx context.Context) error {
 	fmt.Println("=== Synchronization ===")
 
-	// Получаем access token (расшифровываем)
-	authDataDecrypted, err := c.authService.GetAuth(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get auth data: %w", err)
+	// Используем уже расшифрованный access token из c.authData
+	// (он был расшифрован в ReadMasterPassword)
+	if c.authData == nil {
+		return fmt.Errorf("not authenticated or encryption key not available")
 	}
-	accessToken := authDataDecrypted.AccessToken
+	accessToken := c.authData.AccessToken
 
 	// Проверяем что токен не истек
 	expiresAt := time.Unix(c.authData.ExpiresAt, 0)
@@ -29,19 +25,11 @@ func (c *Cli) runSync(ctx context.Context) error {
 	fmt.Println()
 	fmt.Println("Starting synchronization with server...")
 
-	// Создаем logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	// Получаем userID
+	userID := c.authData.UserID
 
-	// Создаем sync service (передаем boltStorage как metadata storage тоже)
-	syncService := sync.NewService(c.apiClient, c.boltStorage, c.boltStorage, logger)
-
-	// Получаем userID (используем username как userID)
-	userID := c.authData.Username
-
-	// Выполняем синхронизацию
-	result, err := syncService.Sync(ctx, userID, accessToken)
+	// Выполняем синхронизацию через готовый сервис
+	result, err := c.syncService.Sync(ctx, userID, accessToken)
 	if err != nil {
 		return fmt.Errorf("synchronization failed: %w", err)
 	}

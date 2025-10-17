@@ -15,22 +15,18 @@ import (
 
 // Service handles client-side data operations with encryption
 type Service struct {
-	crdtStorage   storage.CRDTStorage
-	nodeID        string
-	encryptionKey []byte
+	crdtStorage storage.CRDTStorage
 }
 
 // NewService creates a new data service
-func NewService(crdtStorage storage.CRDTStorage, encryptionKey []byte, nodeID string) *Service {
+func NewService(crdtStorage storage.CRDTStorage) *Service {
 	return &Service{
-		crdtStorage:   crdtStorage,
-		encryptionKey: encryptionKey,
-		nodeID:        nodeID,
+		crdtStorage: crdtStorage,
 	}
 }
 
 // AddCredential adds a new credential to local storage
-func (s *Service) AddCredential(ctx context.Context, userID string, cred *models.Credential) error {
+func (s *Service) AddCredential(ctx context.Context, userID, nodeID string, encryptionKey []byte, cred *models.Credential) error {
 	// Генерируем ID если не задан
 	if cred.ID == "" {
 		cred.ID = uuid.New().String()
@@ -43,7 +39,7 @@ func (s *Service) AddCredential(ctx context.Context, userID string, cred *models
 	}
 
 	// Шифруем данные
-	encryptedData, err := crypto.Encrypt(credJSON, s.encryptionKey)
+	encryptedData, err := crypto.Encrypt(credJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt credential: %w", err)
 	}
@@ -55,7 +51,7 @@ func (s *Service) AddCredential(ctx context.Context, userID string, cred *models
 	}
 
 	// Шифруем metadata
-	encryptedMetadata, err := crypto.Encrypt(metadataJSON, s.encryptionKey)
+	encryptedMetadata, err := crypto.Encrypt(metadataJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt metadata: %w", err)
 	}
@@ -66,7 +62,7 @@ func (s *Service) AddCredential(ctx context.Context, userID string, cred *models
 		ID:        cred.ID,
 		UserID:    userID,
 		Type:      models.DataTypeCredential,
-		NodeID:    s.nodeID,
+		NodeID:    nodeID,
 		Data:      encryptedData,
 		Metadata:  encryptedMetadata,
 		Version:   1,
@@ -85,7 +81,7 @@ func (s *Service) AddCredential(ctx context.Context, userID string, cred *models
 }
 
 // GetCredential retrieves and decrypts a credential by ID
-func (s *Service) GetCredential(ctx context.Context, id string) (*models.Credential, error) {
+func (s *Service) GetCredential(ctx context.Context, id string, encryptionKey []byte) (*models.Credential, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -103,7 +99,7 @@ func (s *Service) GetCredential(ctx context.Context, id string) (*models.Credent
 	}
 
 	// Расшифровываем данные
-	decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+	decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt credential: %w", err)
 	}
@@ -118,7 +114,7 @@ func (s *Service) GetCredential(ctx context.Context, id string) (*models.Credent
 }
 
 // ListCredentials returns all credentials for the user
-func (s *Service) ListCredentials(ctx context.Context) ([]*models.Credential, error) {
+func (s *Service) ListCredentials(ctx context.Context, encryptionKey []byte) ([]*models.Credential, error) {
 	// Получаем все активные entries типа credential
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeCredential)
 	if err != nil {
@@ -128,7 +124,7 @@ func (s *Service) ListCredentials(ctx context.Context) ([]*models.Credential, er
 	credentials := make([]*models.Credential, 0, len(entries))
 	for _, entry := range entries {
 		// Расшифровываем данные
-		decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+		decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 		if err != nil {
 			// Пропускаем поврежденные записи
 			continue
@@ -148,16 +144,16 @@ func (s *Service) ListCredentials(ctx context.Context) ([]*models.Credential, er
 }
 
 // DeleteCredential marks credential as deleted (soft delete)
-func (s *Service) DeleteCredential(ctx context.Context, id string) error {
+func (s *Service) DeleteCredential(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
-	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), s.nodeID); err != nil {
+	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete credential: %w", err)
 	}
 	return nil
 }
 
 // AddTextData adds new text data to local storage
-func (s *Service) AddTextData(ctx context.Context, userID string, text *models.TextData) error {
+func (s *Service) AddTextData(ctx context.Context, userID, nodeID string, encryptionKey []byte, text *models.TextData) error {
 	// Генерируем ID если не задан
 	if text.ID == "" {
 		text.ID = uuid.New().String()
@@ -170,7 +166,7 @@ func (s *Service) AddTextData(ctx context.Context, userID string, text *models.T
 	}
 
 	// Шифруем данные
-	encryptedData, err := crypto.Encrypt(textJSON, s.encryptionKey)
+	encryptedData, err := crypto.Encrypt(textJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt text data: %w", err)
 	}
@@ -182,7 +178,7 @@ func (s *Service) AddTextData(ctx context.Context, userID string, text *models.T
 	}
 
 	// Шифруем metadata
-	encryptedMetadata, err := crypto.Encrypt(metadataJSON, s.encryptionKey)
+	encryptedMetadata, err := crypto.Encrypt(metadataJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt metadata: %w", err)
 	}
@@ -193,7 +189,7 @@ func (s *Service) AddTextData(ctx context.Context, userID string, text *models.T
 		ID:        text.ID,
 		UserID:    userID,
 		Type:      models.DataTypeText,
-		NodeID:    s.nodeID,
+		NodeID:    nodeID,
 		Data:      encryptedData,
 		Metadata:  encryptedMetadata,
 		Version:   1,
@@ -212,7 +208,7 @@ func (s *Service) AddTextData(ctx context.Context, userID string, text *models.T
 }
 
 // GetTextData retrieves and decrypts text data by ID
-func (s *Service) GetTextData(ctx context.Context, id string) (*models.TextData, error) {
+func (s *Service) GetTextData(ctx context.Context, id string, encryptionKey []byte) (*models.TextData, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -230,7 +226,7 @@ func (s *Service) GetTextData(ctx context.Context, id string) (*models.TextData,
 	}
 
 	// Расшифровываем данные
-	decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+	decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt text data: %w", err)
 	}
@@ -245,7 +241,7 @@ func (s *Service) GetTextData(ctx context.Context, id string) (*models.TextData,
 }
 
 // ListTextData returns all text data entries for the user
-func (s *Service) ListTextData(ctx context.Context) ([]*models.TextData, error) {
+func (s *Service) ListTextData(ctx context.Context, encryptionKey []byte) ([]*models.TextData, error) {
 	// Получаем все активные entries типа text
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeText)
 	if err != nil {
@@ -255,7 +251,7 @@ func (s *Service) ListTextData(ctx context.Context) ([]*models.TextData, error) 
 	textData := make([]*models.TextData, 0, len(entries))
 	for _, entry := range entries {
 		// Расшифровываем данные
-		decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+		decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 		if err != nil {
 			// Пропускаем поврежденные записи
 			continue
@@ -275,16 +271,16 @@ func (s *Service) ListTextData(ctx context.Context) ([]*models.TextData, error) 
 }
 
 // DeleteTextData marks text data as deleted (soft delete)
-func (s *Service) DeleteTextData(ctx context.Context, id string) error {
+func (s *Service) DeleteTextData(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
-	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), s.nodeID); err != nil {
+	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete text data: %w", err)
 	}
 	return nil
 }
 
 // AddBinaryData adds new binary data to local storage
-func (s *Service) AddBinaryData(ctx context.Context, userID string, binary *models.BinaryData) error {
+func (s *Service) AddBinaryData(ctx context.Context, userID, nodeID string, encryptionKey []byte, binary *models.BinaryData) error {
 	// Генерируем ID если не задан
 	if binary.ID == "" {
 		binary.ID = uuid.New().String()
@@ -297,7 +293,7 @@ func (s *Service) AddBinaryData(ctx context.Context, userID string, binary *mode
 	}
 
 	// Шифруем данные
-	encryptedData, err := crypto.Encrypt(binaryJSON, s.encryptionKey)
+	encryptedData, err := crypto.Encrypt(binaryJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt binary data: %w", err)
 	}
@@ -309,7 +305,7 @@ func (s *Service) AddBinaryData(ctx context.Context, userID string, binary *mode
 	}
 
 	// Шифруем metadata
-	encryptedMetadata, err := crypto.Encrypt(metadataJSON, s.encryptionKey)
+	encryptedMetadata, err := crypto.Encrypt(metadataJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt metadata: %w", err)
 	}
@@ -320,7 +316,7 @@ func (s *Service) AddBinaryData(ctx context.Context, userID string, binary *mode
 		ID:        binary.ID,
 		UserID:    userID,
 		Type:      models.DataTypeBinary,
-		NodeID:    s.nodeID,
+		NodeID:    nodeID,
 		Data:      encryptedData,
 		Metadata:  encryptedMetadata,
 		Version:   1,
@@ -339,7 +335,7 @@ func (s *Service) AddBinaryData(ctx context.Context, userID string, binary *mode
 }
 
 // GetBinaryData retrieves and decrypts binary data by ID
-func (s *Service) GetBinaryData(ctx context.Context, id string) (*models.BinaryData, error) {
+func (s *Service) GetBinaryData(ctx context.Context, id string, encryptionKey []byte) (*models.BinaryData, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -357,7 +353,7 @@ func (s *Service) GetBinaryData(ctx context.Context, id string) (*models.BinaryD
 	}
 
 	// Расшифровываем данные
-	decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+	decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt binary data: %w", err)
 	}
@@ -372,7 +368,7 @@ func (s *Service) GetBinaryData(ctx context.Context, id string) (*models.BinaryD
 }
 
 // ListBinaryData returns all binary data entries for the user
-func (s *Service) ListBinaryData(ctx context.Context) ([]*models.BinaryData, error) {
+func (s *Service) ListBinaryData(ctx context.Context, encryptionKey []byte) ([]*models.BinaryData, error) {
 	// Получаем все активные entries типа binary
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeBinary)
 	if err != nil {
@@ -382,7 +378,7 @@ func (s *Service) ListBinaryData(ctx context.Context) ([]*models.BinaryData, err
 	binaryData := make([]*models.BinaryData, 0, len(entries))
 	for _, entry := range entries {
 		// Расшифровываем данные
-		decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+		decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 		if err != nil {
 			// Пропускаем поврежденные записи
 			continue
@@ -402,16 +398,16 @@ func (s *Service) ListBinaryData(ctx context.Context) ([]*models.BinaryData, err
 }
 
 // DeleteBinaryData marks binary data as deleted (soft delete)
-func (s *Service) DeleteBinaryData(ctx context.Context, id string) error {
+func (s *Service) DeleteBinaryData(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
-	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), s.nodeID); err != nil {
+	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete binary data: %w", err)
 	}
 	return nil
 }
 
 // AddCardData adds new card data to local storage
-func (s *Service) AddCardData(ctx context.Context, userID string, card *models.CardData) error {
+func (s *Service) AddCardData(ctx context.Context, userID, nodeID string, encryptionKey []byte, card *models.CardData) error {
 	// Генерируем ID если не задан
 	if card.ID == "" {
 		card.ID = uuid.New().String()
@@ -424,7 +420,7 @@ func (s *Service) AddCardData(ctx context.Context, userID string, card *models.C
 	}
 
 	// Шифруем данные
-	encryptedData, err := crypto.Encrypt(cardJSON, s.encryptionKey)
+	encryptedData, err := crypto.Encrypt(cardJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt card data: %w", err)
 	}
@@ -436,7 +432,7 @@ func (s *Service) AddCardData(ctx context.Context, userID string, card *models.C
 	}
 
 	// Шифруем metadata
-	encryptedMetadata, err := crypto.Encrypt(metadataJSON, s.encryptionKey)
+	encryptedMetadata, err := crypto.Encrypt(metadataJSON, encryptionKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt metadata: %w", err)
 	}
@@ -447,7 +443,7 @@ func (s *Service) AddCardData(ctx context.Context, userID string, card *models.C
 		ID:        card.ID,
 		UserID:    userID,
 		Type:      models.DataTypeCard,
-		NodeID:    s.nodeID,
+		NodeID:    nodeID,
 		Data:      encryptedData,
 		Metadata:  encryptedMetadata,
 		Version:   1,
@@ -466,7 +462,7 @@ func (s *Service) AddCardData(ctx context.Context, userID string, card *models.C
 }
 
 // GetCardData retrieves and decrypts card data by ID
-func (s *Service) GetCardData(ctx context.Context, id string) (*models.CardData, error) {
+func (s *Service) GetCardData(ctx context.Context, id string, encryptionKey []byte) (*models.CardData, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -484,7 +480,7 @@ func (s *Service) GetCardData(ctx context.Context, id string) (*models.CardData,
 	}
 
 	// Расшифровываем данные
-	decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+	decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt card data: %w", err)
 	}
@@ -499,7 +495,7 @@ func (s *Service) GetCardData(ctx context.Context, id string) (*models.CardData,
 }
 
 // ListCardData returns all card data entries for the user
-func (s *Service) ListCardData(ctx context.Context) ([]*models.CardData, error) {
+func (s *Service) ListCardData(ctx context.Context, encryptionKey []byte) ([]*models.CardData, error) {
 	// Получаем все активные entries типа card
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeCard)
 	if err != nil {
@@ -509,7 +505,7 @@ func (s *Service) ListCardData(ctx context.Context) ([]*models.CardData, error) 
 	cardData := make([]*models.CardData, 0, len(entries))
 	for _, entry := range entries {
 		// Расшифровываем данные
-		decryptedData, err := crypto.Decrypt(entry.Data, s.encryptionKey)
+		decryptedData, err := crypto.Decrypt(entry.Data, encryptionKey)
 		if err != nil {
 			// Пропускаем поврежденные записи
 			continue
@@ -529,9 +525,9 @@ func (s *Service) ListCardData(ctx context.Context) ([]*models.CardData, error) 
 }
 
 // DeleteCardData marks card data as deleted (soft delete)
-func (s *Service) DeleteCardData(ctx context.Context, id string) error {
+func (s *Service) DeleteCardData(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
-	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), s.nodeID); err != nil {
+	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete card data: %w", err)
 	}
 	return nil

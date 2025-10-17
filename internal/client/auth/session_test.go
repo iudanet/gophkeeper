@@ -71,22 +71,11 @@ func (m *mockAuthStorage) IsAuthenticated(ctx context.Context) (bool, error) {
 
 func TestNewAuthService(t *testing.T) {
 	mockStorage := &mockAuthStorage{}
-	encryptionKey := make([]byte, 32) // 32 bytes key
 
-	authService := NewAuthService(mockStorage, encryptionKey)
+	authService := NewAuthService(nil, mockStorage)
 
 	assert.NotNil(t, authService)
 	assert.Equal(t, mockStorage, authService.storage)
-	assert.Equal(t, encryptionKey, authService.encryptionKey)
-}
-
-func TestNewAuthService_PanicOnInvalidKey(t *testing.T) {
-	mockStorage := &mockAuthStorage{}
-	invalidKey := make([]byte, 16) // Wrong size
-
-	assert.Panics(t, func() {
-		NewAuthService(mockStorage, invalidKey)
-	}, "Should panic with invalid key size")
 }
 
 func TestAuthService_SaveAuth(t *testing.T) {
@@ -118,7 +107,8 @@ func TestAuthService_SaveAuth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStorage := &mockAuthStorage{}
 			encryptionKey := make([]byte, 32)
-			authService := NewAuthService(mockStorage, encryptionKey)
+			authService := NewAuthService(nil, mockStorage)
+			authService.SetEncryptionKey(encryptionKey)
 
 			err := authService.SaveAuth(context.Background(), tt.auth)
 
@@ -147,7 +137,8 @@ func TestAuthService_SaveAuth(t *testing.T) {
 func TestAuthService_GetAuth(t *testing.T) {
 	mockStorage := &mockAuthStorage{}
 	encryptionKey := make([]byte, 32)
-	authService := NewAuthService(mockStorage, encryptionKey)
+	authService := NewAuthService(nil, mockStorage)
+	authService.SetEncryptionKey(encryptionKey)
 
 	ctx := context.Background()
 
@@ -165,7 +156,7 @@ func TestAuthService_GetAuth(t *testing.T) {
 	require.NoError(t, err)
 
 	// Теперь получаем данные обратно
-	retrievedAuth, err := authService.GetAuth(ctx)
+	retrievedAuth, err := authService.GetAuthDecryptData(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, retrievedAuth)
 
@@ -183,9 +174,10 @@ func TestAuthService_GetAuth(t *testing.T) {
 func TestAuthService_GetAuth_NotFound(t *testing.T) {
 	mockStorage := &mockAuthStorage{}
 	encryptionKey := make([]byte, 32)
-	authService := NewAuthService(mockStorage, encryptionKey)
+	authService := NewAuthService(nil, mockStorage)
+	authService.SetEncryptionKey(encryptionKey)
 
-	retrievedAuth, err := authService.GetAuth(context.Background())
+	retrievedAuth, err := authService.GetAuthDecryptData(context.Background())
 
 	assert.Error(t, err)
 	assert.Equal(t, storage.ErrAuthNotFound, err)
@@ -195,7 +187,8 @@ func TestAuthService_GetAuth_NotFound(t *testing.T) {
 func TestAuthService_DeleteAuth(t *testing.T) {
 	mockStorage := &mockAuthStorage{}
 	encryptionKey := make([]byte, 32)
-	authService := NewAuthService(mockStorage, encryptionKey)
+	authService := NewAuthService(nil, mockStorage)
+	authService.SetEncryptionKey(encryptionKey)
 
 	ctx := context.Background()
 
@@ -249,8 +242,7 @@ func TestAuthService_IsAuthenticated(t *testing.T) {
 				isAuthValue: tt.isAuthValue,
 				isAuthErr:   tt.isAuthErr,
 			}
-			encryptionKey := make([]byte, 32)
-			authService := NewAuthService(mockStorage, encryptionKey)
+			authService := NewAuthService(nil, mockStorage)
 
 			got, err := authService.IsAuthenticated(context.Background())
 
@@ -274,7 +266,8 @@ func TestAuthService_EncryptionDecryption_RoundTrip(t *testing.T) {
 		encryptionKey[i] = byte(i)
 	}
 
-	authService := NewAuthService(mockStorage, encryptionKey)
+	authService := NewAuthService(nil, mockStorage)
+	authService.SetEncryptionKey(encryptionKey)
 	ctx := context.Background()
 
 	// Тестовые данные с различными символами
@@ -316,7 +309,7 @@ func TestAuthService_EncryptionDecryption_RoundTrip(t *testing.T) {
 			require.NoError(t, err)
 
 			// Получаем обратно
-			retrieved, err := authService.GetAuth(ctx)
+			retrieved, err := authService.GetAuthDecryptData(ctx)
 			require.NoError(t, err)
 
 			// Проверяем полное совпадение

@@ -1,5 +1,7 @@
 # Binaries
 /bin/
+/client
+/server
 *.exe
 *.exe~
 *.dll
@@ -46,6 +48,7 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+*.bak
 
 # Build artifacts
 dist/
@@ -57,7 +60,3 @@ build/
 # Client config (may contain sensitive data)
 .gophkeeper/
 gophkeeper.yaml
-
-
-client
-server

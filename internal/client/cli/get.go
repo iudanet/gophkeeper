@@ -17,25 +17,25 @@ func (c *Cli) runGet(ctx context.Context, args []string) error {
 	entryID := args[0]
 
 	// Пробуем получить как credential
-	cred, err := c.dataService.GetCredential(ctx, entryID)
+	cred, err := c.dataService.GetCredential(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayCredential(cred)
 	}
 
 	// Пробуем получить как text
-	text, err := c.dataService.GetTextData(ctx, entryID)
+	text, err := c.dataService.GetTextData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayTextData(text)
 	}
 
 	// Пробуем получить как binary
-	binary, err := c.dataService.GetBinaryData(ctx, entryID)
+	binary, err := c.dataService.GetBinaryData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayBinaryData(binary)
 	}
 
 	// Пробуем получить как card
-	card, err := c.dataService.GetCardData(ctx, entryID)
+	card, err := c.dataService.GetCardData(ctx, entryID, c.encryptionKey)
 	if err == nil {
 		return c.displayCardData(card)
 	}
@@ -43,15 +43,9 @@ func (c *Cli) runGet(ctx context.Context, args []string) error {
 	return fmt.Errorf("entry not found with ID: %s", entryID)
 }
 
-func (c *Cli) displayCredential(cred interface{}) error {
+func (c *Cli) displayCredential(credential *models.Credential) error {
 	fmt.Println("=== Credential Details ===")
 	fmt.Println()
-
-	// Type assertion
-	credential, ok := cred.(*models.Credential)
-	if !ok {
-		return fmt.Errorf("invalid credential data")
-	}
 
 	fmt.Printf("Name:     %s\n", credential.Name)
 	fmt.Printf("ID:       %s\n", credential.ID)
@@ -68,14 +62,9 @@ func (c *Cli) displayCredential(cred interface{}) error {
 	return nil
 }
 
-func (c *Cli) displayTextData(text interface{}) error {
+func (c *Cli) displayTextData(textData *models.TextData) error {
 	fmt.Println("=== Text Data Details ===")
 	fmt.Println()
-
-	textData, ok := text.(*models.TextData)
-	if !ok {
-		return fmt.Errorf("invalid text data")
-	}
 
 	fmt.Printf("Name:    %s\n", textData.Name)
 	fmt.Printf("ID:      %s\n", textData.ID)
@@ -89,14 +78,9 @@ func (c *Cli) displayTextData(text interface{}) error {
 	return nil
 }
 
-func (c *Cli) displayBinaryData(binary interface{}) error {
+func (c *Cli) displayBinaryData(binaryData *models.BinaryData) error {
 	fmt.Println("=== Binary Data Details ===")
 	fmt.Println()
-
-	binaryData, ok := binary.(*models.BinaryData)
-	if !ok {
-		return fmt.Errorf("invalid binary data")
-	}
 
 	fmt.Printf("Name:     %s\n", binaryData.Name)
 	fmt.Printf("ID:       %s\n", binaryData.ID)
@@ -127,29 +111,24 @@ func (c *Cli) displayBinaryData(binary interface{}) error {
 	return nil
 }
 
-func (c *Cli) displayCardData(card interface{}) error {
+func (c *Cli) displayCardData(card *models.CardData) error {
 	fmt.Println("=== Card Data Details ===")
 	fmt.Println()
 
-	cardData, ok := card.(*models.CardData)
-	if !ok {
-		return fmt.Errorf("invalid card data")
+	fmt.Printf("Name:   %s\n", card.Name)
+	fmt.Printf("ID:     %s\n", card.ID)
+	fmt.Printf("Number: %s\n", card.Number)
+	if card.Holder != "" {
+		fmt.Printf("Holder: %s\n", card.Holder)
 	}
-
-	fmt.Printf("Name:   %s\n", cardData.Name)
-	fmt.Printf("ID:     %s\n", cardData.ID)
-	fmt.Printf("Number: %s\n", cardData.Number)
-	if cardData.Holder != "" {
-		fmt.Printf("Holder: %s\n", cardData.Holder)
+	if card.Expiry != "" {
+		fmt.Printf("Expiry: %s\n", card.Expiry)
 	}
-	if cardData.Expiry != "" {
-		fmt.Printf("Expiry: %s\n", cardData.Expiry)
+	if card.CVV != "" {
+		fmt.Printf("CVV:    %s\n", card.CVV)
 	}
-	if cardData.CVV != "" {
-		fmt.Printf("CVV:    %s\n", cardData.CVV)
-	}
-	if cardData.PIN != "" {
-		fmt.Printf("PIN:    %s\n", cardData.PIN)
+	if card.PIN != "" {
+		fmt.Printf("PIN:    %s\n", card.PIN)
 	}
 	fmt.Println()
 

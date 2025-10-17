@@ -11,7 +11,7 @@ func (c *Cli) runStatus(ctx context.Context) error {
 	fmt.Println()
 
 	// Проверяем наличие сохраненной сессии
-	isAuth, err := c.boltStorage.IsAuthenticated(ctx)
+	isAuth, err := c.authService.IsAuthenticated(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check authentication: %w", err)
 	}
@@ -23,8 +23,8 @@ func (c *Cli) runStatus(ctx context.Context) error {
 		return nil
 	}
 
-	// Получаем данные
-	authData, err := c.boltStorage.GetAuth(ctx)
+	// Получаем зашифрованные данные (для отображения username/expiry не нужна расшифровка токенов)
+	authData, err := c.authService.GetAuthEncryptData(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get auth data: %w", err)
 	}

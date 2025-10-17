@@ -6,29 +6,39 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/data"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
-	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
+	"github.com/iudanet/gophkeeper/internal/client/sync"
 	"github.com/iudanet/gophkeeper/internal/crypto"
+	"github.com/iudanet/gophkeeper/internal/validation"
 	"golang.org/x/term"
 )
 
-type Cli struct {
-	apiClient   *api.Client
-	boltStorage *boltdb.Storage   // raw storage layer
-	authService *auth.AuthService // auth layer with encryption
-	dataService *data.Service     // data layer with encryption
-	authData    *storage.AuthData // cached auth data (with encrypted tokens in storage)
+type Passwords struct {
+	FromFile string
+	FromArgs string
 }
 
-func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
+type Cli struct {
+	apiClient     *api.Client
+	authService   *auth.AuthService
+	dataService   *data.Service
+	syncService   *sync.Service
+	authData      *storage.AuthData
+	pass          *Passwords // временно храним. при возможности удаляем
+	encryptionKey []byte
+}
+
+func New(apiClient *api.Client, authService *auth.AuthService, dataService *data.Service, syncService *sync.Service, pass *Passwords) *Cli {
 	return &Cli{
 		apiClient:   apiClient,
-		boltStorage: boltStorage,
+		authService: authService,
+		dataService: dataService,
+		syncService: syncService,
+		pass:        pass,
 	}
 }
 
@@ -37,33 +47,45 @@ func New(apiClient *api.Client, boltStorage *boltdb.Storage) *Cli {
 // 2. File specified in masterPasswordFile parameter
 // 3. Command-line parameter masterPassword
 // 4. Interactive prompt (fallback)
-func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPasswordFile string) error {
-	// Проверяем авторизацию (читаем через raw storage для получения username и salt)
-	authData, err := c.boltStorage.GetAuth(ctx)
+func (c *Cli) ReadMasterPassword(ctx context.Context) error {
+	// Получаем зашифрованные auth данные для получения username и public salt
+	encryptedAuthData, err := c.authService.GetAuthEncryptData(ctx)
 	if err != nil {
 		if err == storage.ErrAuthNotFound {
 			return fmt.Errorf("not authenticated. Please run 'gophkeeper login' first")
 		}
 		return fmt.Errorf("failed to get auth data: %w", err)
 	}
-	c.authData = authData
 
 	// Получаем master password из различных источников
-	password, err := c.getMasterPassword(masterPassword, masterPasswordFile)
+	password, err := c.getMasterPassword(*c.pass)
 	if err != nil {
 		return fmt.Errorf("failed to get master password: %w", err)
 	}
 
-	// Деривируем ключи
-	keys, err := crypto.DeriveKeysFromBase64Salt(password, c.authData.Username, c.authData.PublicSalt)
+	// очищаем пароль после использования
+	c.pass = nil
+
+	// Деривируем ключи из master password + username + public salt
+	keys, err := crypto.DeriveKeysFromBase64Salt(password, encryptedAuthData.Username, encryptedAuthData.PublicSalt)
 	if err != nil {
 		return fmt.Errorf("failed to derive keys: %w", err)
 	}
 
-	// Инициализируем auth и data сервисы с encryption key
-	c.authService = auth.NewAuthService(c.boltStorage, keys.EncryptionKey)
-	c.dataService = data.NewService(c.boltStorage, keys.EncryptionKey, c.authData.NodeID)
+	// Сохраняем encryption key в памяти для текущей сессии
+	c.encryptionKey = keys.EncryptionKey
 
+	// Устанавливаем ключ шифрования в authService
+	c.authService.SetEncryptionKey(c.encryptionKey)
+
+	// Получаем расшифрованные auth данные
+	authData, err := c.authService.GetAuthDecryptData(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt auth data: %w", err)
+	}
+	c.authData = authData
+
+	// dataService уже создан в конструкторе, encryption key и nodeID передаются в методы
 	return nil
 }
 
@@ -72,15 +94,15 @@ func (c *Cli) ReadMasterPassword(ctx context.Context, masterPassword, masterPass
 // 2. File specified in masterPasswordFile parameter
 // 3. Command-line parameter masterPassword
 // 4. Interactive prompt (fallback)
-func (c *Cli) getMasterPassword(cliPassword, passwordFile string) (string, error) {
+func (c *Cli) getMasterPassword(passwords Passwords) (string, error) {
 	// Priority 1: Environment variable
 	if envPassword := os.Getenv("GOPHKEEPER_MASTER_PASSWORD"); envPassword != "" {
 		return envPassword, nil
 	}
 
 	// Priority 2: File
-	if passwordFile != "" {
-		content, err := os.ReadFile(passwordFile)
+	if passwords.FromFile != "" {
+		content, err := os.ReadFile(passwords.FromFile)
 		if err != nil {
 			return "", fmt.Errorf("failed to read password file: %w", err)
 		}
@@ -93,8 +115,8 @@ func (c *Cli) getMasterPassword(cliPassword, passwordFile string) (string, error
 	}
 
 	// Priority 3: CLI parameter
-	if cliPassword != "" {
-		return cliPassword, nil
+	if passwords.FromArgs != "" {
+		return passwords.FromArgs, nil
 	}
 
 	// Priority 4: Interactive prompt (fallback)
@@ -105,7 +127,9 @@ func (c *Cli) getMasterPassword(cliPassword, passwordFile string) (string, error
 	if password == "" {
 		return "", fmt.Errorf("password cannot be empty")
 	}
-
+	if err := validation.ValidatePassword(password); err != nil {
+		return "", fmt.Errorf("invalid password: %w", err)
+	}
 	return password, nil
 }
 
@@ -180,7 +204,8 @@ func readInput(prompt string) (string, error) {
 // readPassword читает пароль без отображения на экране
 func readPassword(prompt string) (string, error) {
 	fmt.Print(prompt)
-	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	fd := int(os.Stdin.Fd()) // Получаем файловый дескриптор стандартного ввода
+	passwordBytes, err := term.ReadPassword(fd)
 	fmt.Println() // Переход на новую строку после ввода пароля
 	if err != nil {
 		return "", err
