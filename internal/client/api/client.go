@@ -71,6 +71,16 @@ func (c *Client) Login(ctx context.Context, req api.LoginRequest) (*api.TokenRes
 	return &resp, nil
 }
 
+// Refresh обновляет access token используя refresh token
+func (c *Client) Refresh(ctx context.Context, refreshToken string) (*api.TokenResponse, error) {
+	var resp api.TokenResponse
+	err := c.doAuthRequest(ctx, "POST", "/api/v1/auth/refresh", refreshToken, nil, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("refresh token request failed: %w", err)
+	}
+	return &resp, nil
+}
+
 // Logout выполняет выход из системы
 func (c *Client) Logout(ctx context.Context, accessToken string) error {
 	return c.doAuthRequest(ctx, "POST", "/api/v1/auth/logout", accessToken, nil, nil)

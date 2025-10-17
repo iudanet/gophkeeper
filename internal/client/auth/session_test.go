@@ -2,12 +2,15 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/iudanet/gophkeeper/internal/client/storage"
+	pkgapi "github.com/iudanet/gophkeeper/pkg/api"
 )
 
 // mockAuthStorage implements storage.AuthStorage for testing
@@ -28,6 +31,7 @@ func (m *mockAuthStorage) SaveAuth(ctx context.Context, auth *storage.AuthData) 
 	m.data = &storage.AuthData{
 		Username:     auth.Username,
 		UserID:       auth.UserID,
+		NodeID:       auth.NodeID,
 		AccessToken:  auth.AccessToken,
 		RefreshToken: auth.RefreshToken,
 		PublicSalt:   auth.PublicSalt,
@@ -47,6 +51,7 @@ func (m *mockAuthStorage) GetAuth(ctx context.Context) (*storage.AuthData, error
 	return &storage.AuthData{
 		Username:     m.data.Username,
 		UserID:       m.data.UserID,
+		NodeID:       m.data.NodeID,
 		AccessToken:  m.data.AccessToken,
 		RefreshToken: m.data.RefreshToken,
 		PublicSalt:   m.data.PublicSalt,
@@ -321,4 +326,153 @@ func TestAuthService_EncryptionDecryption_RoundTrip(t *testing.T) {
 			assert.Equal(t, original.ExpiresAt, retrieved.ExpiresAt)
 		})
 	}
+}
+
+// mockAPIClient implements APIClient interface for testing
+type mockAPIClient struct {
+	refreshResp *pkgapi.TokenResponse
+	refreshErr  error
+}
+
+func (m *mockAPIClient) Register(ctx context.Context, req pkgapi.RegisterRequest) (*pkgapi.RegisterResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockAPIClient) GetSalt(ctx context.Context, username string) (*pkgapi.SaltResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockAPIClient) Login(ctx context.Context, req pkgapi.LoginRequest) (*pkgapi.TokenResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockAPIClient) Refresh(ctx context.Context, refreshToken string) (*pkgapi.TokenResponse, error) {
+	if m.refreshErr != nil {
+		return nil, m.refreshErr
+	}
+	return m.refreshResp, nil
+}
+
+func (m *mockAPIClient) Logout(ctx context.Context, accessToken string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func TestAuthService_RefreshToken_Success(t *testing.T) {
+	ctx := context.Background()
+
+	// Setup mock storage with existing auth data
+	mockStorage := &mockAuthStorage{}
+	encryptionKey := make([]byte, 32)
+
+	// Создаём mock API client с успешным ответом
+	mockAPI := &mockAPIClient{
+		refreshResp: &pkgapi.TokenResponse{
+			UserID:       "user-123",
+			AccessToken:  "new-access-token",
+			RefreshToken: "new-refresh-token",
+			ExpiresIn:    900, // 15 минут
+		},
+	}
+
+	authService := NewAuthService(mockAPI, mockStorage)
+	authService.SetEncryptionKey(encryptionKey)
+
+	// Сохраняем начальные auth данные
+	initialAuth := &storage.AuthData{
+		Username:     "testuser",
+		UserID:       "user-123",
+		NodeID:       "node-456",
+		AccessToken:  "old-access-token",
+		RefreshToken: "old-refresh-token",
+		PublicSalt:   "salt123",
+		ExpiresAt:    time.Now().Add(-10 * time.Minute).Unix(), // истёкший токен
+	}
+
+	err := authService.SaveAuth(ctx, initialAuth)
+	require.NoError(t, err)
+
+	// Вызываем RefreshToken
+	err = authService.RefreshToken(ctx)
+	require.NoError(t, err)
+
+	// Проверяем, что токены были обновлены
+	updatedAuth, err := authService.GetAuthDecryptData(ctx)
+	require.NoError(t, err)
+
+	assert.Equal(t, "new-access-token", updatedAuth.AccessToken)
+	assert.Equal(t, "new-refresh-token", updatedAuth.RefreshToken)
+	assert.Greater(t, updatedAuth.ExpiresAt, time.Now().Unix())
+
+	// Проверяем, что другие поля остались без изменений
+	assert.Equal(t, initialAuth.Username, updatedAuth.Username)
+	assert.Equal(t, initialAuth.UserID, updatedAuth.UserID)
+	assert.Equal(t, initialAuth.NodeID, updatedAuth.NodeID)
+	assert.Equal(t, initialAuth.PublicSalt, updatedAuth.PublicSalt)
+}
+
+func TestAuthService_RefreshToken_NoEncryptionKey(t *testing.T) {
+	ctx := context.Background()
+
+	mockStorage := &mockAuthStorage{}
+	mockAPI := &mockAPIClient{}
+
+	authService := NewAuthService(mockAPI, mockStorage)
+	// НЕ устанавливаем encryption key
+
+	err := authService.RefreshToken(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "encryption key not set")
+}
+
+func TestAuthService_RefreshToken_NoAuthData(t *testing.T) {
+	ctx := context.Background()
+
+	// Storage без данных
+	mockStorage := &mockAuthStorage{}
+	encryptionKey := make([]byte, 32)
+	mockAPI := &mockAPIClient{}
+
+	authService := NewAuthService(mockAPI, mockStorage)
+	authService.SetEncryptionKey(encryptionKey)
+
+	err := authService.RefreshToken(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get auth data")
+}
+
+func TestAuthService_RefreshToken_APIError(t *testing.T) {
+	ctx := context.Background()
+
+	mockStorage := &mockAuthStorage{}
+	encryptionKey := make([]byte, 32)
+
+	// Mock API с ошибкой
+	mockAPI := &mockAPIClient{
+		refreshErr: fmt.Errorf("server error: invalid refresh token"),
+	}
+
+	authService := NewAuthService(mockAPI, mockStorage)
+	authService.SetEncryptionKey(encryptionKey)
+
+	// Сохраняем начальные данные
+	initialAuth := &storage.AuthData{
+		Username:     "testuser",
+		UserID:       "user-123",
+		AccessToken:  "old-access-token",
+		RefreshToken: "old-refresh-token",
+		PublicSalt:   "salt123",
+		ExpiresAt:    time.Now().Unix(),
+	}
+
+	err := authService.SaveAuth(ctx, initialAuth)
+	require.NoError(t, err)
+
+	// Вызываем RefreshToken - должна быть ошибка
+	err = authService.RefreshToken(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to refresh token")
+	assert.Contains(t, err.Error(), "invalid refresh token")
 }

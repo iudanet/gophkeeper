@@ -20,6 +20,11 @@ type Service interface {
 	// Возвращает результат с токенами и ключом шифрования
 	Login(ctx context.Context, username, masterPassword string) (*LoginResult, error)
 
+	// RefreshToken обновляет access token используя refresh token
+	// Автоматически сохраняет новые токены в хранилище
+	// Требует установленного ключа шифрования через SetEncryptionKey
+	RefreshToken(ctx context.Context) error
+
 	// Session management methods (требуют установленного ключа через SetEncryptionKey)
 
 	// SetEncryptionKey устанавливает ключ шифрования для работы с хранилищем

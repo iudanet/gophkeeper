@@ -9,9 +9,9 @@
 
 ## Статус проекта (на 2025-10-15)
 
-### Завершено (9 фаз):
+### Завершено (10 фаз):
 - Инициализация, модели данных, валидация
-- Криптография, SQLite storage (80.3% coverage)
+- Криптография, SQLite storage (80.3% coverage) с MaxOpenConns=1 ✅
 - CRDT (94.7% coverage)
 - Sync endpoints с 100% тестами
 - AuthMiddleware (100% coverage)
@@ -19,6 +19,7 @@
 - **✅ Client CLI: register, login, logout, status команды**
 - **✅ Server Auth Handlers тесты (82.5% coverage)**
 - **✅ Client CRDT Storage + Data Service + CLI data commands (add, list, get, delete)**
+- **✅ Версионирование (--version флаг с Version, BuildDate, GitCommit через ldflags)**
 
 ### Частично (3 фазы):
 - API (~70%) — ✅ auth handlers с тестами, sync endpoints готовы
@@ -38,7 +39,7 @@
 - CRDT (LWW-Element-Set + Lamport Clock) реализованы
 - Полные тесты sync handlers
 - Полная валидация username, модели данных, криптоядро
-- SQLite storage с миграциями, WAL mode и MaxOpenConns=1 (требует проверки)
+- **✅ SQLite storage с миграциями, WAL mode и MaxOpenConns=1** (подтверждено в storage.go:39)
 - **✅ JWT + refresh tokens реализованы с полными тестами (82.5% coverage)**
 - **✅ CLI команды: register, login, logout, status**
 - **✅ Client auth архитектура с тремя слоями: CLI → Service (API) → AuthService (crypto) → Storage (BoltDB)**
@@ -61,6 +62,7 @@
 - **✅ CLI commands для всех типов данных (credentials, text, binary, card) — add/list/get/delete**
 - **✅ Safe card number masking — защита от IndexOutOfRange для коротких номеров**
 - **✅ Binary file support — сохранение filename в metadata, MIME type detection**
+- **✅ Версионирование (--version)** — реализовано для клиента и сервера (main.go с ldflags, Makefile:7)
 
 ---
 
@@ -115,25 +117,77 @@
 
 ## Основные риски и рекомендации
 
-| Риск | Митигация |
-|-------|-----------|
-| CRDT сложность | Начинать с базового LWW, добавлять функциональность по шагам |
-| Недостижение 80% coverage | Писать тесты параллельно с кодом (TDD) |
-| SQLite "database is locked" | Проверить и гарантировать WAL + MaxOpenConns=1 |
-| Argon2id медленный | Можно адаптировать параметры |
-| Отсутствие TLS | Внедрить TLS как приоритетный элемент |
-| Отсутствие middleware защиты | Реализовать rate limiting и логирование |
+| Риск | Статус | Митигация |
+|-------|--------|-----------|
+| CRDT сложность | ✅ Решено | LWW-Element-Set реализован, 94.7% coverage |
+| Недостижение 80% coverage | ✅ Решено | Большинство модулей >80% coverage |
+| SQLite "database is locked" | ✅ Решено | WAL + MaxOpenConns=1 подтверждено (storage.go:39) |
+| Argon2id медленный | ⚠️ Активно | Текущие параметры: 1 iter, 64MB, 4 threads — приемлемо |
+| Отсутствие TLS | ❌ Критично | Внедрить TLS как приоритетный элемент |
+| Отсутствие middleware защиты | ✅ Решено | RateLimit, Logging, Recovery реализованы (100% coverage) |
 
 ---
 
 ## Итоговые цели для MVP
 
-- Master password + Argon2id, AES-256-GCM шифрование, JWT авторизация с refresh token
-- SQLite сервер с WAL + max connections = 1
-- BoltDB клиентское хранилище
-- Полный CRDT на сервере и клиенте для конфликтоустойчивой синхронизации
-- Базовые API и CLI команды для auth и data
-- Минимум 80% покрытие тестами
-- TLS HTTPS для сервера и клиента
-- Минимум middleware (Auth, RateLimit, Logging, Recovery)
-- Документация и CI/CD
+- ✅ Master password + Argon2id, AES-256-GCM шифрование, JWT авторизация с refresh token
+- ✅ SQLite сервер с WAL + max connections = 1
+- ✅ BoltDB клиентское хранилище
+- ✅ Полный CRDT на сервере и клиенте для конфликтоустойчивой синхронизации
+- ✅ Базовые API и CLI команды для auth и data
+- ✅ Минимум 80% покрытие тестами
+- ❌ TLS HTTPS для сервера и клиента
+- ✅ Минимум middleware (Auth, RateLimit, Logging, Recovery)
+- ⚠️ Документация (API.md устарел, нет USAGE.md, SECURITY.md)
+- ❌ CI/CD
+
+---
+
+## Необязательные функции (из ТЗ)
+
+| Функция | Статус | Примечание |
+|---------|--------|-----------|
+| OTP (One Time Password) support | ❌ Не реализовано | Можно добавить как новый тип данных |
+| TUI (Terminal User Interface) | ❌ Не реализовано | CLI полностью реализован |
+| Бинарный протокол (gRPC) | ❌ Не реализовано | Используется HTTP REST |
+| Функциональные/интеграционные тесты | ⚠️ Частично | Есть unit-тесты (>80%), нет integration |
+| Swagger/OpenAPI документация | ⚠️ Частично | Есть API.md (требует обновления) |
+
+---
+
+## Корреляция документов (проверка 2025-10-17)
+
+### ✅ Согласованность между ТЗ, README, CLAUDE.md и планом:
+- Все обязательные требования из README.MD отражены в плане
+- TECHNICAL_SPEC.md полностью коррелирует с реализацией
+- CLAUDE.md содержит актуальные инструкции по разработке
+- Большинство функций из ТЗ реализованы и протестированы (>80% coverage)
+
+### ⚠️ Выявленные расхождения:
+
+1. **API.md устарел:**
+   - Описывает "stub responses" и TODO
+   - Отсутствуют sync endpoints (`GET/POST /api/v1/sync`)
+   - Не отражает фактическую реализацию с тестами (82.5% coverage)
+   - **Действие:** Обновить API.md с актуальными endpoints и примерами
+
+2. **Отсутствие USAGE.md и SECURITY.md:**
+   - ТЗ требует "исчерпывающую документацию"
+   - Нет руководства пользователя (USAGE.md)
+   - Нет описания security-практик (SECURITY.md)
+   - **Действие:** Создать USAGE.md и SECURITY.md
+
+3. **TLS отсутствует (критично):**
+   - ТЗ п.12: "TLS 1.3 обязателен"
+   - README требует TLS для продакшена
+   - **Действие:** Реализовать TLS как приоритет #1
+
+4. **Нет автоматического refresh token renewal:**
+   - ТЗ подразумевает автообновление (JWT 15 мин, refresh 30 дней)
+   - Токены генерируются, но автообновление не реализовано
+   - **Действие:** Добавить логику автообновления в client
+
+5. **Конфигурация частично реализована:**
+   - ТЗ п.9: приоритет `GOPHKEEPER_MASTER_PASSWORD` из env
+   - Нет config.yaml для сервера
+   - **Действие:** Добавить config.yaml и env vars

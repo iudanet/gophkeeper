@@ -14,13 +14,36 @@ func (c *Cli) runSync(ctx context.Context) error {
 	if c.authData == nil {
 		return fmt.Errorf("not authenticated or encryption key not available")
 	}
-	accessToken := c.authData.AccessToken
 
-	// Проверяем что токен не истек
+	// Проверяем срок действия токена и обновляем если нужно
+	// Добавляем буфер 60 секунд - обновляем токен заранее
 	expiresAt := time.Unix(c.authData.ExpiresAt, 0)
-	if time.Now().After(expiresAt) {
-		return fmt.Errorf("access token has expired. Please login again")
+	now := time.Now()
+	bufferTime := 60 * time.Second
+
+	// Если токен истёк или скоро истечёт - обновляем через refresh token
+	if now.Add(bufferTime).After(expiresAt) {
+		fmt.Println()
+		fmt.Println("Access token expired or expiring soon, refreshing...")
+
+		// Вызываем authService.RefreshToken()
+		if err := c.authService.RefreshToken(ctx); err != nil {
+			return fmt.Errorf("failed to refresh access token: %w. Please login again", err)
+		}
+
+		// Получаем обновлённые токены из хранилища
+		updatedAuthData, err := c.authService.GetAuthDecryptData(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get updated auth data: %w", err)
+		}
+
+		// Обновляем c.authData для использования в sync
+		c.authData = updatedAuthData
+
+		fmt.Println("✓ Access token refreshed successfully")
 	}
+
+	accessToken := c.authData.AccessToken
 
 	fmt.Println()
 	fmt.Println("Starting synchronization with server...")
