@@ -1,0 +1,128 @@
+# GoReleaser configuration for GophKeeper
+# Documentation: https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    # Ensure dependencies are up to date
+    - go mod tidy
+    # Run tests before building
+    - go test ./...
+
+builds:
+  # Client build
+  - id: client
+    main: ./cmd/client
+    binary: gophkeeper-client
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.BuildDate={{.Date}}
+      - -X main.GitCommit={{.FullCommit}}
+
+  # Server build
+  - id: server
+    main: ./cmd/server
+    binary: gophkeeper-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.BuildDate={{.Date}}
+      - -X main.GitCommit={{.FullCommit}}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - 'typo'
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: iudanet
+    name: GophKeeper
+  draft: false
+  prerelease: auto
+  mode: append
+  header: |
+    ## GophKeeper Release {{ .Tag }}
+
+    ### Downloads
+
+    #### Client
+    - **Linux**: `gophkeeper-client` for amd64 and arm64
+    - **Windows**: `gophkeeper-client.exe` for amd64 and arm64
+    - **macOS**: `gophkeeper-client` for amd64 (Intel) and arm64 (Apple Silicon)
+
+    #### Server
+    - **Linux**: `gophkeeper-server` for amd64 and arm64
+    - **Windows**: `gophkeeper-server.exe` for amd64 and arm64
+    - **macOS**: `gophkeeper-server` for amd64 (Intel) and arm64 (Apple Silicon)
+
+    ### Installation
+
+    Download the appropriate archive for your platform, extract it, and run the binary.
+
+    ### Changes
+  footer: |
+
+    ---
+
+    **Full Changelog**: https://github.com/iudanet/GophKeeper/compare/{{ .PreviousTag }}...{{ .Tag }}
