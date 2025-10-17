@@ -10,6 +10,9 @@ import (
 	"github.com/iudanet/gophkeeper/pkg/api"
 )
 
+//go:generate moq -out apiclient_mock.go . APIClient
+//go:generate moq -out metadata_mock.go . MetadataStorage
+
 // APIClient defines interface for HTTP communication with server
 type APIClient interface {
 	Sync(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error)

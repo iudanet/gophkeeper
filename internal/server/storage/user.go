@@ -7,6 +7,8 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
+//go:generate moq -out userstorage_mock.go . UserStorage
+
 // UserStorage defines interface for user data persistence
 type UserStorage interface {
 	// CreateUser creates a new user in the storage

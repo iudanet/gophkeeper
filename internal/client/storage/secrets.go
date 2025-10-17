@@ -6,6 +6,8 @@ import (
 )
 
 // SecretType represents the type of stored secret
+//
+
 type SecretType string
 
 const (
@@ -28,6 +30,8 @@ type Secret struct {
 	Data      []byte
 	Version   int64
 }
+
+//go:generate moq -out secretsstorage_mock.go . SecretsStorage
 
 // SecretsStorage defines interface for storing encrypted secrets on client
 type SecretsStorage interface {

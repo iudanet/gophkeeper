@@ -6,6 +6,8 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
+//go:generate moq -out tokenstorage_mock.go . TokenStorage
+
 // TokenStorage defines interface for refresh token persistence
 type TokenStorage interface {
 	// SaveRefreshToken stores a new refresh token

@@ -1,12 +1,12 @@
 package storage
 
-//go:generate moq -out crdt_mock.go . CRDTStorage
-
 import (
 	"context"
 
 	"github.com/iudanet/gophkeeper/internal/models"
 )
+
+//go:generate moq -out crdtstorage_mock.go . CRDTStorage
 
 // CRDTStorage defines interface for storing CRDT entries on client
 type CRDTStorage interface {
