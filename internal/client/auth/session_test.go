@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	pkgapi "github.com/iudanet/gophkeeper/pkg/api"
 )
@@ -341,35 +342,6 @@ func TestAuthService_EncryptionDecryption_RoundTrip(t *testing.T) {
 	}
 }
 
-// mockAPIClient implements APIClient interface for testing
-type mockAPIClient struct {
-	refreshResp *pkgapi.TokenResponse
-	refreshErr  error
-}
-
-func (m *mockAPIClient) Register(ctx context.Context, req pkgapi.RegisterRequest) (*pkgapi.RegisterResponse, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (m *mockAPIClient) GetSalt(ctx context.Context, username string) (*pkgapi.SaltResponse, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (m *mockAPIClient) Login(ctx context.Context, req pkgapi.LoginRequest) (*pkgapi.TokenResponse, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (m *mockAPIClient) Refresh(ctx context.Context, refreshToken string) (*pkgapi.TokenResponse, error) {
-	if m.refreshErr != nil {
-		return nil, m.refreshErr
-	}
-	return m.refreshResp, nil
-}
-
-func (m *mockAPIClient) Logout(ctx context.Context, accessToken string) error {
-	return fmt.Errorf("not implemented")
-}
-
 func TestAuthService_RefreshToken_Success(t *testing.T) {
 	ctx := context.Background()
 
@@ -389,12 +361,14 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 	}
 
 	// Создаём mock API client с успешным ответом
-	mockAPI := &mockAPIClient{
-		refreshResp: &pkgapi.TokenResponse{
-			UserID:       "user-123",
-			AccessToken:  "new-access-token",
-			RefreshToken: "new-refresh-token",
-			ExpiresIn:    900, // 15 минут
+	mockAPI := &api.ClientAPIMock{
+		RefreshFunc: func(ctx context.Context, refreshToken string) (*pkgapi.TokenResponse, error) {
+			return &pkgapi.TokenResponse{
+				UserID:       "user-123",
+				AccessToken:  "new-access-token",
+				RefreshToken: "new-refresh-token",
+				ExpiresIn:    900, // 15 минут
+			}, nil
 		},
 	}
 
@@ -440,7 +414,7 @@ func TestAuthService_RefreshToken_NoEncryptionKey(t *testing.T) {
 	ctx := context.Background()
 
 	mockStorage := &storage.AuthStorageMock{}
-	mockAPI := &mockAPIClient{}
+	mockAPI := &api.ClientAPIMock{}
 
 	authService := NewAuthService(mockAPI, mockStorage)
 	// НЕ устанавливаем encryption key
@@ -461,7 +435,7 @@ func TestAuthService_RefreshToken_NoAuthData(t *testing.T) {
 	}
 
 	encryptionKey := make([]byte, 32)
-	mockAPI := &mockAPIClient{}
+	mockAPI := &api.ClientAPIMock{}
 
 	authService := NewAuthService(mockAPI, mockStorage)
 	authService.SetEncryptionKey(encryptionKey)
@@ -493,8 +467,10 @@ func TestAuthService_RefreshToken_APIError(t *testing.T) {
 	encryptionKey := make([]byte, 32)
 
 	// Mock API с ошибкой
-	mockAPI := &mockAPIClient{
-		refreshErr: fmt.Errorf("server error: invalid refresh token"),
+	mockAPI := &api.ClientAPIMock{
+		RefreshFunc: func(ctx context.Context, refreshToken string) (*pkgapi.TokenResponse, error) {
+			return nil, fmt.Errorf("server error: invalid refresh token")
+		},
 	}
 
 	authService := NewAuthService(mockAPI, mockStorage)

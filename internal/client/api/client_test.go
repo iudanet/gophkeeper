@@ -14,17 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestNewClient проверяет создание нового клиента
-func TestNewClient(t *testing.T) {
-	baseURL := "http://localhost:8080"
-	client := NewClient(baseURL)
-
-	assert.NotNil(t, client)
-	assert.Equal(t, baseURL, client.baseURL)
-	assert.NotNil(t, client.httpClient)
-	assert.Equal(t, 30*time.Second, client.httpClient.Timeout)
-}
-
 // TestClient_Register проверяет успешную регистрацию
 func TestClient_Register(t *testing.T) {
 	// Создаем mock сервер

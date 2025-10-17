@@ -15,6 +15,31 @@ import (
 	"github.com/iudanet/gophkeeper/pkg/api"
 )
 
+//go:generate moq -out apiclient_mock.go . ClientAPI
+
+var _ ClientAPI = (*Client)(nil)
+
+// ClientAPI определяет интерфейс методов HTTP клиента для взаимодействия с сервером
+type ClientAPI interface {
+	// Register регистрирует нового пользователя
+	Register(ctx context.Context, req api.RegisterRequest) (*api.RegisterResponse, error)
+
+	// GetSalt получает public salt пользователя по username
+	GetSalt(ctx context.Context, username string) (*api.SaltResponse, error)
+
+	// Login выполняет аутентификацию пользователя
+	Login(ctx context.Context, req api.LoginRequest) (*api.TokenResponse, error)
+
+	// Refresh обновляет access token используя refresh token
+	Refresh(ctx context.Context, refreshToken string) (*api.TokenResponse, error)
+
+	// Logout выполняет выход из системы
+	Logout(ctx context.Context, accessToken string) error
+
+	// Sync выполняет синхронизацию данных с сервером
+	Sync(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error)
+}
+
 // Client представляет HTTP клиент для взаимодействия с сервером
 type Client struct {
 	httpClient *http.Client
@@ -29,7 +54,7 @@ type ClientOptions struct {
 }
 
 // NewClient создает новый API клиент с настройками по умолчанию
-func NewClient(baseURL string) *Client {
+func NewClient(baseURL string) ClientAPI {
 	return NewClientWithOptions(ClientOptions{
 		BaseURL:  baseURL,
 		Insecure: false,
