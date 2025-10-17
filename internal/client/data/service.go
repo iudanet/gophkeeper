@@ -13,20 +13,45 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
-// Service handles client-side data operations with encryption
-type Service struct {
+//go:generate moq -out service_mock.go . Service
+
+// service определяет интерфейс для клиентского data сервиса
+type Service interface {
+	AddCredential(ctx context.Context, userID, nodeID string, encryptionKey []byte, cred *models.Credential) error
+	GetCredential(ctx context.Context, id string, encryptionKey []byte) (*models.Credential, error)
+	ListCredentials(ctx context.Context, encryptionKey []byte) ([]*models.Credential, error)
+	DeleteCredential(ctx context.Context, id, nodeID string) error
+
+	AddTextData(ctx context.Context, userID, nodeID string, encryptionKey []byte, text *models.TextData) error
+	GetTextData(ctx context.Context, id string, encryptionKey []byte) (*models.TextData, error)
+	ListTextData(ctx context.Context, encryptionKey []byte) ([]*models.TextData, error)
+	DeleteTextData(ctx context.Context, id, nodeID string) error
+
+	AddBinaryData(ctx context.Context, userID, nodeID string, encryptionKey []byte, binary *models.BinaryData) error
+	GetBinaryData(ctx context.Context, id string, encryptionKey []byte) (*models.BinaryData, error)
+	ListBinaryData(ctx context.Context, encryptionKey []byte) ([]*models.BinaryData, error)
+	DeleteBinaryData(ctx context.Context, id, nodeID string) error
+
+	AddCardData(ctx context.Context, userID, nodeID string, encryptionKey []byte, card *models.CardData) error
+	GetCardData(ctx context.Context, id string, encryptionKey []byte) (*models.CardData, error)
+	ListCardData(ctx context.Context, encryptionKey []byte) ([]*models.CardData, error)
+	DeleteCardData(ctx context.Context, id, nodeID string) error
+}
+
+// service handles client-side data operations with encryption
+type service struct {
 	crdtStorage storage.CRDTStorage
 }
 
-// NewService creates a new data service
-func NewService(crdtStorage storage.CRDTStorage) *Service {
-	return &Service{
+// Newservice creates a new data service
+func NewService(crdtStorage storage.CRDTStorage) Service {
+	return &service{
 		crdtStorage: crdtStorage,
 	}
 }
 
 // AddCredential adds a new credential to local storage
-func (s *Service) AddCredential(ctx context.Context, userID, nodeID string, encryptionKey []byte, cred *models.Credential) error {
+func (s *service) AddCredential(ctx context.Context, userID, nodeID string, encryptionKey []byte, cred *models.Credential) error {
 	// Генерируем ID если не задан
 	if cred.ID == "" {
 		cred.ID = uuid.New().String()
@@ -81,7 +106,7 @@ func (s *Service) AddCredential(ctx context.Context, userID, nodeID string, encr
 }
 
 // GetCredential retrieves and decrypts a credential by ID
-func (s *Service) GetCredential(ctx context.Context, id string, encryptionKey []byte) (*models.Credential, error) {
+func (s *service) GetCredential(ctx context.Context, id string, encryptionKey []byte) (*models.Credential, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -114,7 +139,7 @@ func (s *Service) GetCredential(ctx context.Context, id string, encryptionKey []
 }
 
 // ListCredentials returns all credentials for the user
-func (s *Service) ListCredentials(ctx context.Context, encryptionKey []byte) ([]*models.Credential, error) {
+func (s *service) ListCredentials(ctx context.Context, encryptionKey []byte) ([]*models.Credential, error) {
 	// Получаем все активные entries типа credential
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeCredential)
 	if err != nil {
@@ -144,7 +169,7 @@ func (s *Service) ListCredentials(ctx context.Context, encryptionKey []byte) ([]
 }
 
 // DeleteCredential marks credential as deleted (soft delete)
-func (s *Service) DeleteCredential(ctx context.Context, id, nodeID string) error {
+func (s *service) DeleteCredential(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
 	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete credential: %w", err)
@@ -153,7 +178,7 @@ func (s *Service) DeleteCredential(ctx context.Context, id, nodeID string) error
 }
 
 // AddTextData adds new text data to local storage
-func (s *Service) AddTextData(ctx context.Context, userID, nodeID string, encryptionKey []byte, text *models.TextData) error {
+func (s *service) AddTextData(ctx context.Context, userID, nodeID string, encryptionKey []byte, text *models.TextData) error {
 	// Генерируем ID если не задан
 	if text.ID == "" {
 		text.ID = uuid.New().String()
@@ -208,7 +233,7 @@ func (s *Service) AddTextData(ctx context.Context, userID, nodeID string, encryp
 }
 
 // GetTextData retrieves and decrypts text data by ID
-func (s *Service) GetTextData(ctx context.Context, id string, encryptionKey []byte) (*models.TextData, error) {
+func (s *service) GetTextData(ctx context.Context, id string, encryptionKey []byte) (*models.TextData, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -241,7 +266,7 @@ func (s *Service) GetTextData(ctx context.Context, id string, encryptionKey []by
 }
 
 // ListTextData returns all text data entries for the user
-func (s *Service) ListTextData(ctx context.Context, encryptionKey []byte) ([]*models.TextData, error) {
+func (s *service) ListTextData(ctx context.Context, encryptionKey []byte) ([]*models.TextData, error) {
 	// Получаем все активные entries типа text
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeText)
 	if err != nil {
@@ -271,7 +296,7 @@ func (s *Service) ListTextData(ctx context.Context, encryptionKey []byte) ([]*mo
 }
 
 // DeleteTextData marks text data as deleted (soft delete)
-func (s *Service) DeleteTextData(ctx context.Context, id, nodeID string) error {
+func (s *service) DeleteTextData(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
 	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete text data: %w", err)
@@ -280,7 +305,7 @@ func (s *Service) DeleteTextData(ctx context.Context, id, nodeID string) error {
 }
 
 // AddBinaryData adds new binary data to local storage
-func (s *Service) AddBinaryData(ctx context.Context, userID, nodeID string, encryptionKey []byte, binary *models.BinaryData) error {
+func (s *service) AddBinaryData(ctx context.Context, userID, nodeID string, encryptionKey []byte, binary *models.BinaryData) error {
 	// Генерируем ID если не задан
 	if binary.ID == "" {
 		binary.ID = uuid.New().String()
@@ -335,7 +360,7 @@ func (s *Service) AddBinaryData(ctx context.Context, userID, nodeID string, encr
 }
 
 // GetBinaryData retrieves and decrypts binary data by ID
-func (s *Service) GetBinaryData(ctx context.Context, id string, encryptionKey []byte) (*models.BinaryData, error) {
+func (s *service) GetBinaryData(ctx context.Context, id string, encryptionKey []byte) (*models.BinaryData, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -368,7 +393,7 @@ func (s *Service) GetBinaryData(ctx context.Context, id string, encryptionKey []
 }
 
 // ListBinaryData returns all binary data entries for the user
-func (s *Service) ListBinaryData(ctx context.Context, encryptionKey []byte) ([]*models.BinaryData, error) {
+func (s *service) ListBinaryData(ctx context.Context, encryptionKey []byte) ([]*models.BinaryData, error) {
 	// Получаем все активные entries типа binary
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeBinary)
 	if err != nil {
@@ -398,7 +423,7 @@ func (s *Service) ListBinaryData(ctx context.Context, encryptionKey []byte) ([]*
 }
 
 // DeleteBinaryData marks binary data as deleted (soft delete)
-func (s *Service) DeleteBinaryData(ctx context.Context, id, nodeID string) error {
+func (s *service) DeleteBinaryData(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
 	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete binary data: %w", err)
@@ -407,7 +432,7 @@ func (s *Service) DeleteBinaryData(ctx context.Context, id, nodeID string) error
 }
 
 // AddCardData adds new card data to local storage
-func (s *Service) AddCardData(ctx context.Context, userID, nodeID string, encryptionKey []byte, card *models.CardData) error {
+func (s *service) AddCardData(ctx context.Context, userID, nodeID string, encryptionKey []byte, card *models.CardData) error {
 	// Генерируем ID если не задан
 	if card.ID == "" {
 		card.ID = uuid.New().String()
@@ -462,7 +487,7 @@ func (s *Service) AddCardData(ctx context.Context, userID, nodeID string, encryp
 }
 
 // GetCardData retrieves and decrypts card data by ID
-func (s *Service) GetCardData(ctx context.Context, id string, encryptionKey []byte) (*models.CardData, error) {
+func (s *service) GetCardData(ctx context.Context, id string, encryptionKey []byte) (*models.CardData, error) {
 	// Получаем CRDT entry
 	entry, err := s.crdtStorage.GetEntry(ctx, id)
 	if err != nil {
@@ -495,7 +520,7 @@ func (s *Service) GetCardData(ctx context.Context, id string, encryptionKey []by
 }
 
 // ListCardData returns all card data entries for the user
-func (s *Service) ListCardData(ctx context.Context, encryptionKey []byte) ([]*models.CardData, error) {
+func (s *service) ListCardData(ctx context.Context, encryptionKey []byte) ([]*models.CardData, error) {
 	// Получаем все активные entries типа card
 	entries, err := s.crdtStorage.GetEntriesByType(ctx, models.DataTypeCard)
 	if err != nil {
@@ -525,7 +550,7 @@ func (s *Service) ListCardData(ctx context.Context, encryptionKey []byte) ([]*mo
 }
 
 // DeleteCardData marks card data as deleted (soft delete)
-func (s *Service) DeleteCardData(ctx context.Context, id, nodeID string) error {
+func (s *service) DeleteCardData(ctx context.Context, id, nodeID string) error {
 	now := time.Now()
 	if err := s.crdtStorage.DeleteEntry(ctx, id, now.Unix(), nodeID); err != nil {
 		return fmt.Errorf("failed to delete card data: %w", err)

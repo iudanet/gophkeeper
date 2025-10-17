@@ -6,6 +6,8 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
+//go:generate moq -out crdtstorage_mock.go . CRDTStorage
+
 // CRDTStorage defines interface for storing CRDT entries on client
 type CRDTStorage interface {
 	// SaveEntry stores or updates a CRDT entry

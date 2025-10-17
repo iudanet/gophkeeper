@@ -5,19 +5,30 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/crypto"
 	"github.com/iudanet/gophkeeper/internal/validation"
 	pkgapi "github.com/iudanet/gophkeeper/pkg/api"
 )
 
+//go:generate moq -out apiclient_mock.go . APIClient
+
+// APIClient определяет интерфейс для HTTP коммуникации с сервером
+type APIClient interface {
+	Register(ctx context.Context, req pkgapi.RegisterRequest) (*pkgapi.RegisterResponse, error)
+	GetSalt(ctx context.Context, username string) (*pkgapi.SaltResponse, error)
+	Login(ctx context.Context, req pkgapi.LoginRequest) (*pkgapi.TokenResponse, error)
+	Refresh(ctx context.Context, refreshToken string) (*pkgapi.TokenResponse, error)
+	Logout(ctx context.Context, accessToken string) error
+}
+
 // AuthService предоставляет функции авторизации и управления сессией
 // Ключ шифрования устанавливается через SetEncryptionKey после успешного Login/Register
 type AuthService struct {
-	apiClient     *api.Client
+	apiClient     APIClient
 	storage       storage.AuthStorage
 	encryptionKey []byte // опциональный ключ шифрования (устанавливается после login)
 }
@@ -26,7 +37,7 @@ type AuthService struct {
 var _ Service = (*AuthService)(nil)
 
 // NewAuthService создает новый сервис авторизации
-func NewAuthService(apiClient *api.Client, storage storage.AuthStorage) *AuthService {
+func NewAuthService(apiClient APIClient, storage storage.AuthStorage) *AuthService {
 	return &AuthService{
 		apiClient: apiClient,
 		storage:   storage,
@@ -291,6 +302,43 @@ func (s *AuthService) Logout(ctx context.Context) error {
 
 	// 4. Очищаем ключ шифрования
 	s.encryptionKey = nil
+
+	return nil
+}
+
+// RefreshToken обновляет access token используя refresh token
+// Автоматически загружает текущий refresh token, запрашивает новую пару токенов
+// и сохраняет их в хранилище
+func (s *AuthService) RefreshToken(ctx context.Context) error {
+	// Проверяем что ключ шифрования установлен
+	if s.encryptionKey == nil {
+		return fmt.Errorf("encryption key not set, call SetEncryptionKey first")
+	}
+
+	// Получаем текущие auth данные с расшифрованными токенами
+	authData, err := s.GetAuthDecryptData(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	// Вызываем API для обновления токена
+	tokenResp, err := s.apiClient.Refresh(ctx, authData.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	// Обновляем токены в auth data
+	authData.AccessToken = tokenResp.AccessToken
+	authData.RefreshToken = tokenResp.RefreshToken
+	authData.ExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Unix()
+
+	// Сохраняем обновлённые данные (токены будут зашифрованы в SaveAuth)
+	if err := s.SaveAuth(ctx, authData); err != nil {
+		return fmt.Errorf("failed to save refreshed tokens: %w", err)
+	}
+
+	slog.Debug("Access token refreshed successfully",
+		"expires_at", time.Unix(authData.ExpiresAt, 0).Format(time.RFC3339))
 
 	return nil
 }

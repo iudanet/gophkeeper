@@ -12,29 +12,43 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
+var usage = "Usage: gophkeeper add <credential|text|binary|card> [--sync]"
+
 func (c *Cli) runAdd(ctx context.Context, args []string) error {
 	// Проверяем подкоманду
 	if len(args) == 0 {
-		return fmt.Errorf("missing data type. Usage: gophkeeper add <credential|text|binary|card>")
+		return fmt.Errorf("missing data type. %s", usage)
 	}
 
+	// Парсим флаг --sync
+	syncFlag := false
 	dataType := args[0]
+
+	// Проверяем наличие флага --sync в аргументах
+	if len(args) > 1 {
+		for _, arg := range args[1:] {
+			if arg == "--sync" {
+				syncFlag = true
+				break
+			}
+		}
+	}
 
 	switch dataType {
 	case "credential":
-		return c.runAddCredential(ctx)
+		return c.runAddCredential(ctx, syncFlag)
 	case "text":
-		return c.runAddText(ctx)
+		return c.runAddText(ctx, syncFlag)
 	case "binary":
-		return c.runAddBinary(ctx)
+		return c.runAddBinary(ctx, syncFlag)
 	case "card":
-		return c.runAddCard(ctx)
+		return c.runAddCard(ctx, syncFlag)
 	default:
-		return fmt.Errorf("unknown data type: %s. Use: credential, text, binary, or card", dataType)
+		return fmt.Errorf("unknown data type: %s. %s", dataType, usage)
 	}
 }
 
-func (c *Cli) runAddCredential(ctx context.Context) error {
+func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 	fmt.Println("=== Add Credential ===")
 	fmt.Println()
 	fmt.Println("Enter credential details:")
@@ -101,12 +115,21 @@ func (c *Cli) runAddCredential(ctx context.Context) error {
 	fmt.Printf("Name: %s\n", name)
 	fmt.Printf("Login: %s\n", login)
 	fmt.Println()
-	fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server.")
+
+	// Автоматическая синхронизация если флаг установлен
+	if autoSync {
+		fmt.Println("Syncing with server...")
+		if err := c.runSync(ctx); err != nil {
+			return fmt.Errorf("failed to sync: %w", err)
+		}
+	} else {
+		fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server.")
+	}
 
 	return nil
 }
 
-func (c *Cli) runAddText(ctx context.Context) error {
+func (c *Cli) runAddText(ctx context.Context, autoSync bool) error {
 	fmt.Println("=== Add Text Data ===")
 	fmt.Println()
 	fmt.Println("Enter text data details:")
@@ -141,12 +164,21 @@ func (c *Cli) runAddText(ctx context.Context) error {
 	fmt.Println("✓ Text data added successfully!")
 	fmt.Printf("Name: %s\n", name)
 	fmt.Println()
-	fmt.Println("Note: Data is stored locally. Run 'gophkeeper sync' to sync with server.")
+
+	// Автоматическая синхронизация если флаг установлен
+	if autoSync {
+		fmt.Println("Syncing with server...")
+		if err := c.runSync(ctx); err != nil {
+			return fmt.Errorf("failed to sync: %w", err)
+		}
+	} else {
+		fmt.Println("Note: Data is stored locally. Run 'gophkeeper sync' to sync with server.")
+	}
 
 	return nil
 }
 
-func (c *Cli) runAddCard(ctx context.Context) error {
+func (c *Cli) runAddCard(ctx context.Context, autoSync bool) error {
 	fmt.Println("=== Add Card Data ===")
 	fmt.Println()
 	fmt.Println("Enter card details:")
@@ -205,12 +237,21 @@ func (c *Cli) runAddCard(ctx context.Context) error {
 	fmt.Println("✓ Card added successfully!")
 	fmt.Printf("Name: %s\n", name)
 	fmt.Println()
-	fmt.Println("Note: Card is stored locally. Run 'gophkeeper sync' to sync with server.")
+
+	// Автоматическая синхронизация если флаг установлен
+	if autoSync {
+		fmt.Println("Syncing with server...")
+		if err := c.runSync(ctx); err != nil {
+			return fmt.Errorf("failed to sync: %w", err)
+		}
+	} else {
+		fmt.Println("Note: Card is stored locally. Run 'gophkeeper sync' to sync with server.")
+	}
 
 	return nil
 }
 
-func (c *Cli) runAddBinary(ctx context.Context) error {
+func (c *Cli) runAddBinary(ctx context.Context, autoSync bool) error {
 	fmt.Println("=== Add Binary Data ===")
 	fmt.Println()
 	fmt.Println("Enter binary file details:")
@@ -270,7 +311,16 @@ func (c *Cli) runAddBinary(ctx context.Context) error {
 	}
 	fmt.Printf("Size:     %d bytes\n", len(content))
 	fmt.Println()
-	fmt.Println("Note: File is stored locally. Run 'gophkeeper sync' to sync with server.")
+
+	// Автоматическая синхронизация если флаг установлен
+	if autoSync {
+		fmt.Println("Syncing with server...")
+		if err := c.runSync(ctx); err != nil {
+			return fmt.Errorf("failed to sync: %w", err)
+		}
+	} else {
+		fmt.Println("Note: File is stored locally. Run 'gophkeeper sync' to sync with server.")
+	}
 
 	return nil
 }

@@ -3,14 +3,42 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/iudanet/gophkeeper/pkg/api"
 )
+
+//go:generate moq -out apiclient_mock.go . ClientAPI
+
+var _ ClientAPI = (*Client)(nil)
+
+// ClientAPI определяет интерфейс методов HTTP клиента для взаимодействия с сервером
+type ClientAPI interface {
+	// Register регистрирует нового пользователя
+	Register(ctx context.Context, req api.RegisterRequest) (*api.RegisterResponse, error)
+
+	// GetSalt получает public salt пользователя по username
+	GetSalt(ctx context.Context, username string) (*api.SaltResponse, error)
+
+	// Login выполняет аутентификацию пользователя
+	Login(ctx context.Context, req api.LoginRequest) (*api.TokenResponse, error)
+
+	// Refresh обновляет access token используя refresh token
+	Refresh(ctx context.Context, refreshToken string) (*api.TokenResponse, error)
+
+	// Logout выполняет выход из системы
+	Logout(ctx context.Context, accessToken string) error
+
+	// Sync выполняет синхронизацию данных с сервером
+	Sync(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error)
+}
 
 // Client представляет HTTP клиент для взаимодействия с сервером
 type Client struct {
@@ -18,12 +46,60 @@ type Client struct {
 	baseURL    string
 }
 
-// NewClient создает новый API клиент
-func NewClient(baseURL string) *Client {
+// ClientOptions опции для создания API клиента
+type ClientOptions struct {
+	BaseURL    string
+	CACertPath string // Путь к CA сертификату для проверки самоподписанного сертификата сервера
+	Insecure   bool   // Пропустить проверку TLS сертификата (только для разработки!)
+}
+
+// NewClient создает новый API клиент с настройками по умолчанию
+func NewClient(baseURL string) ClientAPI {
+	return NewClientWithOptions(ClientOptions{
+		BaseURL:  baseURL,
+		Insecure: false,
+	})
+}
+
+// NewClientWithOptions создает новый API клиент с кастомными опциями TLS
+func NewClientWithOptions(opts ClientOptions) *Client {
+	// Создаем базовый HTTP transport
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+
+	// Если включен insecure режим - отключаем валидацию сертификатов
+	if opts.Insecure {
+		transport.TLSClientConfig.InsecureSkipVerify = true // #nosec G402 - опция для dev окружения
+	}
+
+	// Если указан CA сертификат - загружаем его для валидации самоподписанных сертификатов
+	if opts.CACertPath != "" && !opts.Insecure {
+		caCert, err := os.ReadFile(opts.CACertPath)
+		if err != nil {
+			// Логируем ошибку, но не падаем - будем использовать системные CA
+			fmt.Fprintf(os.Stderr, "Warning: failed to load CA certificate from %s: %v\n", opts.CACertPath, err)
+			fmt.Fprintf(os.Stderr, "Falling back to system CA certificates\n")
+		} else {
+			caCertPool := x509.NewCertPool()
+			if !caCertPool.AppendCertsFromPEM(caCert) {
+				fmt.Fprintf(os.Stderr, "Warning: failed to parse CA certificate from %s\n", opts.CACertPath)
+				fmt.Fprintf(os.Stderr, "Falling back to system CA certificates\n")
+			} else {
+				// Успешно загрузили CA сертификат
+				transport.TLSClientConfig.RootCAs = caCertPool
+			}
+		}
+	}
+	// Если CA не указан и не insecure - будет использоваться системный CA pool (по умолчанию)
+
 	return &Client{
-		baseURL: baseURL,
+		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 			// Настройка обработки редиректов
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Ограничиваем количество редиректов
@@ -67,6 +143,16 @@ func (c *Client) Login(ctx context.Context, req api.LoginRequest) (*api.TokenRes
 	err := c.doRequest(ctx, "POST", "/api/v1/auth/login", req, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("login request failed: %w", err)
+	}
+	return &resp, nil
+}
+
+// Refresh обновляет access token используя refresh token
+func (c *Client) Refresh(ctx context.Context, refreshToken string) (*api.TokenResponse, error) {
+	var resp api.TokenResponse
+	err := c.doAuthRequest(ctx, "POST", "/api/v1/auth/refresh", refreshToken, nil, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("refresh token request failed: %w", err)
 	}
 	return &resp, nil
 }

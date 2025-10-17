@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -32,6 +33,12 @@ func main() {
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	dbPath := flag.String("db", "gophkeeper.db", "Path to SQLite database file")
 	jwtSecret := flag.String("jwt-secret", "", "JWT secret (auto-generated if empty)")
+
+	// TLS flags
+	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
+	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
+	insecure := flag.Bool("insecure", false, "Run server without TLS (development only)")
+
 	flag.Parse()
 
 	// Show version and exit if requested
@@ -122,6 +129,33 @@ func main() {
 		slog.String("rate_limit_auth", "10 req/min"),
 	)
 
+	// Проверка TLS конфигурации
+	useTLS := !*insecure
+	if useTLS {
+		if *tlsCert == "" || *tlsKey == "" {
+			logger.Error("TLS certificate and key are required when not using --insecure flag")
+			logger.Info("Use --insecure flag for development without TLS, or provide --tls-cert and --tls-key")
+			os.Exit(1)
+		}
+
+		// Проверяем существование файлов
+		if _, err := os.Stat(*tlsCert); os.IsNotExist(err) {
+			logger.Error("TLS certificate file not found", slog.String("path", *tlsCert))
+			os.Exit(1)
+		}
+		if _, err := os.Stat(*tlsKey); os.IsNotExist(err) {
+			logger.Error("TLS key file not found", slog.String("path", *tlsKey))
+			os.Exit(1)
+		}
+
+		logger.Info("TLS enabled",
+			slog.String("cert", *tlsCert),
+			slog.String("key", *tlsKey),
+		)
+	} else {
+		logger.Warn("Running in INSECURE mode without TLS - suitable for development only!")
+	}
+
 	// Создание HTTP сервера
 	addr := fmt.Sprintf(":%d", *port)
 	server := &http.Server{
@@ -132,11 +166,45 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Настройка TLS если включен
+	if useTLS {
+		// Загружаем сертификат и ключ
+		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		if err != nil {
+			logger.Error("Failed to load TLS certificate", slog.Any("error", err))
+			os.Exit(1)
+		}
+
+		server.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			},
+		}
+	}
+
 	// Запуск сервера в отдельной горутине
 	serverErrors := make(chan error, 1)
 	go func() {
-		logger.Info("Server listening", slog.String("address", addr))
-		serverErrors <- server.ListenAndServe()
+		protocol := "http"
+		if useTLS {
+			protocol = "https"
+		}
+		logger.Info("Server listening",
+			slog.String("address", addr),
+			slog.String("protocol", protocol),
+		)
+
+		if useTLS {
+			// Для TLS используем пустые строки, так как сертификат уже загружен в TLSConfig
+			serverErrors <- server.ListenAndServeTLS("", "")
+		} else {
+			serverErrors <- server.ListenAndServe()
+		}
 	}()
 
 	// Graceful shutdown

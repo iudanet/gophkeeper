@@ -6,6 +6,8 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
+//go:generate moq -out datastorage_mock.go . DataStorage
+
 // DataStorage defines interface for user data (CRDT entries) persistence
 type DataStorage interface {
 	// SaveEntry creates or updates a CRDT entry in the storage

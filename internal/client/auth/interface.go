@@ -6,6 +6,8 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 )
 
+//go:generate moq -out service_mock.go . Service
+
 // Service defines the main interface for authentication operations
 // This service manages both authentication (register/login) and session storage.
 // After successful login/register, use SetEncryptionKey to enable storage operations.
@@ -19,6 +21,11 @@ type Service interface {
 	// Login выполняет аутентификацию пользователя
 	// Возвращает результат с токенами и ключом шифрования
 	Login(ctx context.Context, username, masterPassword string) (*LoginResult, error)
+
+	// RefreshToken обновляет access token используя refresh token
+	// Автоматически сохраняет новые токены в хранилище
+	// Требует установленного ключа шифрования через SetEncryptionKey
+	RefreshToken(ctx context.Context) error
 
 	// Session management methods (требуют установленного ключа через SetEncryptionKey)
 

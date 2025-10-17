@@ -42,5 +42,20 @@ func (c *Cli) runStatus(ctx context.Context) error {
 		fmt.Println("⚠️  Token has expired. Please login again.")
 	}
 
+	// Получаем количество записей, ожидающих синхронизации
+	pendingCount, err := c.syncService.GetPendingSyncCount(ctx)
+	if err != nil {
+		// Не прерываем выполнение, просто логируем
+		fmt.Printf("\nWarning: Failed to get pending sync count: %v\n", err)
+	} else {
+		fmt.Println()
+		if pendingCount > 0 {
+			fmt.Printf("⚠️  Pending sync: %d record(s) waiting to be synchronized\n", pendingCount)
+			fmt.Println("Run 'gophkeeper sync' to synchronize with server.")
+		} else {
+			fmt.Println("✓ All data synchronized with server")
+		}
+	}
+
 	return nil
 }

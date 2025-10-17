@@ -10,6 +10,9 @@ import (
 	"github.com/iudanet/gophkeeper/pkg/api"
 )
 
+//go:generate moq -out apiclient_mock.go . APIClient
+//go:generate moq -out metadata_mock.go . MetadataStorage
+
 // APIClient defines interface for HTTP communication with server
 type APIClient interface {
 	Sync(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error)
@@ -202,4 +205,24 @@ func (s *Service) mergeEntry(ctx context.Context, newEntry *models.CRDTEntry) (b
 		"old_timestamp", existingEntry.Timestamp)
 
 	return false, nil
+}
+
+// GetPendingSyncCount возвращает количество записей, ожидающих синхронизации
+// Использует lastSyncTimestamp из metadata storage для определения несинхронизированных записей
+func (s *Service) GetPendingSyncCount(ctx context.Context) (int, error) {
+	// Получаем last sync timestamp
+	lastSyncTimestamp, err := s.metadataStorage.GetLastSyncTimestamp(ctx)
+	if err != nil {
+		// Если timestamp не найден (первая синхронизация), используем 0
+		s.logger.Debug("No last sync timestamp found, using 0", "error", err)
+		lastSyncTimestamp = 0
+	}
+
+	// Получаем все записи после последней синхронизации
+	entries, err := s.crdtStorage.GetEntriesAfterTimestamp(ctx, lastSyncTimestamp)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pending entries: %w", err)
+	}
+
+	return len(entries), nil
 }
