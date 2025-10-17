@@ -12,10 +12,12 @@ import (
 	"github.com/iudanet/gophkeeper/internal/models"
 )
 
+var usage = "Usage: gophkeeper add <credential|text|binary|card> [--sync]"
+
 func (c *Cli) runAdd(ctx context.Context, args []string) error {
 	// Проверяем подкоманду
 	if len(args) == 0 {
-		return fmt.Errorf("missing data type. Usage: gophkeeper add <credential|text|binary|card> [--sync]")
+		return fmt.Errorf("missing data type. %s", usage)
 	}
 
 	// Парсим флаг --sync
@@ -42,7 +44,7 @@ func (c *Cli) runAdd(ctx context.Context, args []string) error {
 	case "card":
 		return c.runAddCard(ctx, syncFlag)
 	default:
-		return fmt.Errorf("unknown data type: %s. Use: credential, text, binary, or card", dataType)
+		return fmt.Errorf("unknown data type: %s. %s", dataType, usage)
 	}
 }
 
