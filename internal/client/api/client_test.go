@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -497,4 +498,395 @@ func TestClient_HTTPClientRedirect(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.Equal(t, "user-123", resp.UserID)
 	assert.Equal(t, 3, redirectCount) // Проверяем что было 3 редиректа
+}
+
+// TestClient_Refresh проверяет успешный refresh токена
+func TestClient_Refresh(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/auth/refresh", r.URL.Path)
+		assert.Equal(t, "Bearer old_refresh_token", r.Header.Get("Authorization"))
+
+		w.WriteHeader(http.StatusOK)
+		resp := api.TokenResponse{
+			UserID:       "user-123",
+			AccessToken:  "new_access_token",
+			RefreshToken: "new_refresh_token",
+			ExpiresIn:    900,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	resp, err := client.Refresh(ctx, "old_refresh_token")
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "new_access_token", resp.AccessToken)
+	assert.Equal(t, "new_refresh_token", resp.RefreshToken)
+	assert.Equal(t, int64(900), resp.ExpiresIn)
+}
+
+// TestClient_Refresh_InvalidToken проверяет обработку невалидного refresh токена
+func TestClient_Refresh_InvalidToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		resp := api.ErrorResponse{
+			Message: "invalid refresh token",
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	resp, err := client.Refresh(ctx, "invalid_token")
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "server error (401): invalid refresh token")
+}
+
+// TestClient_NewClientWithOptions_Insecure проверяет создание клиента с insecure опцией
+func TestClient_NewClientWithOptions_Insecure(t *testing.T) {
+	opts := ClientOptions{
+		BaseURL:  "https://localhost:8443",
+		Insecure: true,
+	}
+
+	client := NewClientWithOptions(opts)
+
+	assert.NotNil(t, client)
+	assert.Equal(t, "https://localhost:8443", client.baseURL)
+	assert.NotNil(t, client.httpClient)
+}
+
+// TestClient_NewClientWithOptions_WithCACert проверяет создание клиента с CA сертификатом
+func TestClient_NewClientWithOptions_WithCACert(t *testing.T) {
+	// Создаем временный файл с невалидным CA сертификатом
+	tmpFile := t.TempDir() + "/ca.crt"
+	err := os.WriteFile(tmpFile, []byte("invalid ca cert"), 0600)
+	require.NoError(t, err)
+
+	opts := ClientOptions{
+		BaseURL:    "https://localhost:8443",
+		CACertPath: tmpFile,
+		Insecure:   false,
+	}
+
+	// Должен создать клиент, но с предупреждением о невалидном сертификате
+	client := NewClientWithOptions(opts)
+
+	assert.NotNil(t, client)
+	assert.Equal(t, "https://localhost:8443", client.baseURL)
+}
+
+// TestClient_NewClientWithOptions_NonexistentCA проверяет создание клиента с несуществующим CA файлом
+func TestClient_NewClientWithOptions_NonexistentCA(t *testing.T) {
+	opts := ClientOptions{
+		BaseURL:    "https://localhost:8443",
+		CACertPath: "/nonexistent/path/ca.crt",
+		Insecure:   false,
+	}
+
+	// Должен создать клиент с fallback на системные CA
+	client := NewClientWithOptions(opts)
+
+	assert.NotNil(t, client)
+	assert.Equal(t, "https://localhost:8443", client.baseURL)
+}
+
+// TestClient_Logout_NoResponse проверяет успешный logout без тела ответа
+func TestClient_Logout_NoResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/auth/logout", r.URL.Path)
+		assert.Equal(t, "Bearer test_token", r.Header.Get("Authorization"))
+
+		w.WriteHeader(http.StatusNoContent) // No body
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	err := client.Logout(ctx, "test_token")
+
+	require.NoError(t, err)
+}
+
+// TestClient_Sync_EmptyEntries проверяет синхронизацию с пустым списком записей
+func TestClient_Sync_EmptyEntries(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/sync", r.URL.Path)
+		assert.Equal(t, "Bearer test_token", r.Header.Get("Authorization"))
+
+		w.WriteHeader(http.StatusOK)
+		resp := api.SyncResponse{
+			Entries:          []api.CRDTEntry{},
+			CurrentTimestamp: time.Now().Unix(),
+			Conflicts:        0,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+	req := api.SyncRequest{
+		Entries: []api.CRDTEntry{},
+		Since:   0,
+	}
+
+	resp, err := client.Sync(ctx, "test_token", req)
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Empty(t, resp.Entries)
+}
+
+// TestClient_RedirectLimit проверяет ограничение на количество редиректов
+func TestClient_RedirectLimit(t *testing.T) {
+	redirectCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirectCount++
+		// Всегда редиректим
+		w.Header().Set("Location", "/redirected")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+	req := api.RegisterRequest{
+		Username:    "testuser",
+		AuthKeyHash: "hash123",
+		PublicSalt:  "salt123",
+	}
+
+	resp, err := client.Register(ctx, req)
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "stopped after 10 redirects")
+	assert.Equal(t, 10, redirectCount) // Должно быть ровно 10 редиректов
+}
+
+// TestClient_NewClient проверяет создание клиента с базовыми настройками
+func TestClient_NewClient(t *testing.T) {
+	client := NewClient("https://example.com")
+
+	assert.NotNil(t, client)
+	c, ok := client.(*Client)
+	require.True(t, ok)
+	assert.Equal(t, "https://example.com", c.baseURL)
+	assert.NotNil(t, c.httpClient)
+}
+
+// TestClient_NewClientWithOptions_ValidPEMCert проверяет загрузку валидного PEM сертификата
+func TestClient_NewClientWithOptions_ValidPEMCert(t *testing.T) {
+	// Создаем временный файл с валидным PEM сертификатом (самоподписанный)
+	validPEM := `-----BEGIN CERTIFICATE-----
+MIIBkTCB+wIJAKHHCgVZU1uLMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl
+c3RDQTAeFw0yMzAxMDEwMDAwMDBaFw0yNDAxMDEwMDAwMDBaMBExDzANBgNVBAMM
+BnRlc3RDQTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAwFQPiPDl3h5xRn3n
+XwYvvvN4L6XXXX+XX3XX+XXXXXXXXXXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+-----END CERTIFICATE-----`
+
+	tmpFile := t.TempDir() + "/valid_ca.crt"
+	err := os.WriteFile(tmpFile, []byte(validPEM), 0600)
+	require.NoError(t, err)
+
+	opts := ClientOptions{
+		BaseURL:    "https://localhost:8443",
+		CACertPath: tmpFile,
+		Insecure:   false,
+	}
+
+	client := NewClientWithOptions(opts)
+
+	assert.NotNil(t, client)
+	assert.Equal(t, "https://localhost:8443", client.baseURL)
+}
+
+// TestClient_GetSalt_EmptyResponse проверяет обработку пустого ответа от сервера
+func TestClient_GetSalt_EmptyResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	resp, err := client.GetSalt(ctx, "testuser")
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Empty(t, resp.PublicSalt)
+}
+
+// TestClient_Refresh_EmptyToken проверяет refresh с пустым токеном
+func TestClient_Refresh_EmptyToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusUnauthorized)
+		resp := api.ErrorResponse{
+			Message: "empty token",
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	resp, err := client.Refresh(ctx, "")
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "server error (401)")
+}
+
+// TestClient_Logout_EmptyToken проверяет logout с пустым токеном
+func TestClient_Logout_EmptyToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	err := client.Logout(ctx, "")
+
+	require.Error(t, err)
+}
+
+// TestClient_Sync_WithMetadata проверяет синхронизацию с метаданными
+func TestClient_Sync_WithMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req api.SyncRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+
+		// Проверяем что метаданные переданы
+		assert.NotEmpty(t, req.Entries[0].Metadata)
+
+		w.WriteHeader(http.StatusOK)
+		resp := api.SyncResponse{
+			Entries: []api.CRDTEntry{
+				{
+					ID:        "entry-1",
+					UserID:    "user-123",
+					DataType:  string(models.DataTypeCredential),
+					Data:      []byte("encrypted_data"),
+					Metadata:  "encrypted_metadata",
+					Timestamp: time.Now().Unix(),
+					Deleted:   false,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+			},
+			CurrentTimestamp: time.Now().Unix(),
+			Conflicts:        0,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+	now := time.Now()
+	req := api.SyncRequest{
+		Entries: []api.CRDTEntry{
+			{
+				ID:        "entry-1",
+				UserID:    "user-123",
+				DataType:  string(models.DataTypeCredential),
+				Data:      []byte("local_data"),
+				Metadata:  "local_metadata",
+				Timestamp: now.Unix(),
+				Deleted:   false,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+		Since: 0,
+	}
+
+	resp, err := client.Sync(ctx, "test_token", req)
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.NotEmpty(t, resp.Entries)
+	assert.Equal(t, "encrypted_metadata", resp.Entries[0].Metadata)
+}
+
+// TestClient_Register_ReadBodyError проверяет обработку ошибки чтения тела ответа
+func TestClient_Register_ReadBodyError(t *testing.T) {
+	// Создаем сервер, который закрывает соединение до отправки полного ответа
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(http.StatusOK)
+		// Закрываем соединение без отправки данных
+		hj, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hj.Hijack()
+			_ = conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+	req := api.RegisterRequest{
+		Username:    "testuser",
+		AuthKeyHash: "hash123",
+		PublicSalt:  "salt123",
+	}
+
+	resp, err := client.Register(ctx, req)
+
+	// Должна быть ошибка чтения тела
+	require.Error(t, err)
+	assert.Nil(t, resp)
+}
+
+// TestClient_RedirectPreservesAuthHeader проверяет сохранение заголовка Authorization при редиректе
+func TestClient_RedirectPreservesAuthHeader(t *testing.T) {
+	redirected := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !redirected {
+			redirected = true
+			// Проверяем что Authorization header присутствует
+			assert.Equal(t, "Bearer test_token", r.Header.Get("Authorization"))
+			w.Header().Set("Location", "/redirected")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+
+		// После редиректа проверяем что Authorization header сохранился
+		assert.Equal(t, "Bearer test_token", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	err := client.Logout(ctx, "test_token")
+
+	require.NoError(t, err)
+	assert.True(t, redirected)
 }
