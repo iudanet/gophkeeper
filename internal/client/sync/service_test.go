@@ -565,3 +565,116 @@ func TestSync_SaveEntryError(t *testing.T) {
 	assert.Equal(t, 0, result.MergedEntries)
 	assert.Equal(t, 1, result.SkippedEntries)
 }
+
+func TestGetPendingSyncCount_NoEntries(t *testing.T) {
+	mockAPI := &mockAPIClient{}
+	mockStorage := newMockCRDTStorage()
+	mockMetadata := newMockMetadataStorage()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	service := NewService(mockAPI, mockStorage, mockMetadata, logger)
+	ctx := context.Background()
+
+	count, err := service.GetPendingSyncCount(ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestGetPendingSyncCount_WithPendingEntries(t *testing.T) {
+	mockAPI := &mockAPIClient{}
+	mockStorage := newMockCRDTStorage()
+	mockMetadata := newMockMetadataStorage()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// Устанавливаем lastSyncTimestamp
+	mockMetadata.lastSyncTimestamp = 100
+
+	// Добавляем записи с timestamp > 100 (pending)
+	entry1 := &models.CRDTEntry{
+		ID:        "entry-1",
+		UserID:    "user-123",
+		Type:      models.DataTypeCredential,
+		Data:      []byte("data-1"),
+		Timestamp: 150,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	entry2 := &models.CRDTEntry{
+		ID:        "entry-2",
+		UserID:    "user-123",
+		Type:      models.DataTypeCredential,
+		Data:      []byte("data-2"),
+		Timestamp: 200,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	// Добавляем запись с timestamp <= 100 (уже синхронизирована)
+	entry3 := &models.CRDTEntry{
+		ID:        "entry-3",
+		UserID:    "user-123",
+		Type:      models.DataTypeCredential,
+		Data:      []byte("data-3"),
+		Timestamp: 50,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	mockStorage.entries["entry-1"] = entry1
+	mockStorage.entries["entry-2"] = entry2
+	mockStorage.entries["entry-3"] = entry3
+
+	service := NewService(mockAPI, mockStorage, mockMetadata, logger)
+	ctx := context.Background()
+
+	count, err := service.GetPendingSyncCount(ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, count) // Только entry-1 и entry-2
+}
+
+func TestGetPendingSyncCount_NoLastSyncTimestamp(t *testing.T) {
+	mockAPI := &mockAPIClient{}
+	mockStorage := newMockCRDTStorage()
+	mockMetadata := newMockMetadataStorage()
+	mockMetadata.getLastSyncTimestampErr = errors.New("timestamp not found")
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// Добавляем записи
+	entry1 := &models.CRDTEntry{
+		ID:        "entry-1",
+		UserID:    "user-123",
+		Type:      models.DataTypeCredential,
+		Data:      []byte("data-1"),
+		Timestamp: 100,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	mockStorage.entries["entry-1"] = entry1
+
+	service := NewService(mockAPI, mockStorage, mockMetadata, logger)
+	ctx := context.Background()
+
+	count, err := service.GetPendingSyncCount(ctx)
+
+	// При отсутствии lastSyncTimestamp используется 0, все записи считаются pending
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+func TestGetPendingSyncCount_StorageError(t *testing.T) {
+	mockAPI := &mockAPIClient{}
+	mockStorage := newMockCRDTStorage()
+	mockStorage.getEntriesAfterTimestampErr = errors.New("storage error")
+	mockMetadata := newMockMetadataStorage()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	service := NewService(mockAPI, mockStorage, mockMetadata, logger)
+	ctx := context.Background()
+
+	count, err := service.GetPendingSyncCount(ctx)
+
+	require.Error(t, err)
+	assert.Equal(t, 0, count)
+	assert.Contains(t, err.Error(), "failed to get pending entries")
+}

@@ -203,3 +203,23 @@ func (s *Service) mergeEntry(ctx context.Context, newEntry *models.CRDTEntry) (b
 
 	return false, nil
 }
+
+// GetPendingSyncCount возвращает количество записей, ожидающих синхронизации
+// Использует lastSyncTimestamp из metadata storage для определения несинхронизированных записей
+func (s *Service) GetPendingSyncCount(ctx context.Context) (int, error) {
+	// Получаем last sync timestamp
+	lastSyncTimestamp, err := s.metadataStorage.GetLastSyncTimestamp(ctx)
+	if err != nil {
+		// Если timestamp не найден (первая синхронизация), используем 0
+		s.logger.Debug("No last sync timestamp found, using 0", "error", err)
+		lastSyncTimestamp = 0
+	}
+
+	// Получаем все записи после последней синхронизации
+	entries, err := s.crdtStorage.GetEntriesAfterTimestamp(ctx, lastSyncTimestamp)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pending entries: %w", err)
+	}
+
+	return len(entries), nil
+}
