@@ -60,3 +60,6 @@ build/
 # Client config (may contain sensitive data)
 .gophkeeper/
 gophkeeper.yaml
+
+# TLS certificates (generated locally for development)
+certs/

@@ -30,6 +30,10 @@ func main() {
 	masterPassword := flag.String("master-password", "", "Master password (use with caution, prefer env var or file)")
 	masterPasswordFile := flag.String("master-password-file", "", "Path to file containing master password")
 
+	// TLS flags
+	tlsCA := flag.String("tls-ca", "", "Path to CA certificate for validating self-signed server certificate")
+	insecure := flag.Bool("insecure", false, "Skip TLS certificate verification (development only)")
+
 	flag.Parse()
 	pass := cli.Passwords{
 		FromFile: *masterPasswordFile,
@@ -66,8 +70,12 @@ func main() {
 	// Создаем logger
 	logger := slog.Default()
 
-	// Создаем API клиент
-	apiClient := api.NewClient(*serverURL)
+	// Создаем API клиент с TLS настройками
+	apiClient := api.NewClientWithOptions(api.ClientOptions{
+		BaseURL:    *serverURL,
+		CACertPath: *tlsCA,
+		Insecure:   *insecure,
+	})
 
 	// Создаем сервисы
 	authService := auth.NewAuthService(apiClient, boltStorage)

@@ -3,10 +3,13 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/iudanet/gophkeeper/pkg/api"
@@ -18,12 +21,60 @@ type Client struct {
 	baseURL    string
 }
 
-// NewClient создает новый API клиент
+// ClientOptions опции для создания API клиента
+type ClientOptions struct {
+	BaseURL    string
+	CACertPath string // Путь к CA сертификату для проверки самоподписанного сертификата сервера
+	Insecure   bool   // Пропустить проверку TLS сертификата (только для разработки!)
+}
+
+// NewClient создает новый API клиент с настройками по умолчанию
 func NewClient(baseURL string) *Client {
+	return NewClientWithOptions(ClientOptions{
+		BaseURL:  baseURL,
+		Insecure: false,
+	})
+}
+
+// NewClientWithOptions создает новый API клиент с кастомными опциями TLS
+func NewClientWithOptions(opts ClientOptions) *Client {
+	// Создаем базовый HTTP transport
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+
+	// Если включен insecure режим - отключаем валидацию сертификатов
+	if opts.Insecure {
+		transport.TLSClientConfig.InsecureSkipVerify = true // #nosec G402 - опция для dev окружения
+	}
+
+	// Если указан CA сертификат - загружаем его для валидации самоподписанных сертификатов
+	if opts.CACertPath != "" && !opts.Insecure {
+		caCert, err := os.ReadFile(opts.CACertPath)
+		if err != nil {
+			// Логируем ошибку, но не падаем - будем использовать системные CA
+			fmt.Fprintf(os.Stderr, "Warning: failed to load CA certificate from %s: %v\n", opts.CACertPath, err)
+			fmt.Fprintf(os.Stderr, "Falling back to system CA certificates\n")
+		} else {
+			caCertPool := x509.NewCertPool()
+			if !caCertPool.AppendCertsFromPEM(caCert) {
+				fmt.Fprintf(os.Stderr, "Warning: failed to parse CA certificate from %s\n", opts.CACertPath)
+				fmt.Fprintf(os.Stderr, "Falling back to system CA certificates\n")
+			} else {
+				// Успешно загрузили CA сертификат
+				transport.TLSClientConfig.RootCAs = caCertPool
+			}
+		}
+	}
+	// Если CA не указан и не insecure - будет использоваться системный CA pool (по умолчанию)
+
 	return &Client{
-		baseURL: baseURL,
+		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 			// Настройка обработки редиректов
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Ограничиваем количество редиректов
