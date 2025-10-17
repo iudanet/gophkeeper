@@ -1,5 +1,7 @@
 package storage
 
+//go:generate moq -out crdt_mock.go . CRDTStorage
+
 import (
 	"context"
 
