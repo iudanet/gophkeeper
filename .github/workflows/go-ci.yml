@@ -1,0 +1,57 @@
+---
+name: Go CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-go@v6
+      with: { go-version: stable }
+
+    - name: Format
+      run: gofmt -s -w . && git diff --exit-code
+
+    - name: Tidy
+      run: go mod tidy && git diff --exit-code
+
+    - name: Download
+      run: go mod download
+
+    - name: Verify
+      run: go mod verify
+
+    - name: Vet
+      run: go vet ./...
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./... -bench . -benchtime=1x
+
+    - name: Update coverage report
+      uses: ncruces/go-coverage-report@v0
+      with:
+        report: true
+        chart: true
+        amend: true
+      if: |
+        matrix.os == 'ubuntu-latest' &&
+        github.event_name == 'push'
+      continue-on-error: true
