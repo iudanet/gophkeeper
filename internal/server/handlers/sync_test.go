@@ -27,52 +27,6 @@ func setupTestLogger() *slog.Logger {
 	return slog.New(handler)
 }
 
-// mockDataStorage is a mock implementation of DataStorage for testing
-type mockDataStorage struct {
-	entries      []*models.CRDTEntry
-	saveError    error
-	getError     error
-	savedEntries []*models.CRDTEntry // Track saved entries
-}
-
-func (m *mockDataStorage) SaveEntry(ctx context.Context, entry *models.CRDTEntry) (bool, error) {
-	if m.saveError != nil {
-		return false, m.saveError
-	}
-
-	// Simulate CRDT logic: check if entry is newer
-	for _, existing := range m.entries {
-		if existing.ID == entry.ID {
-			if !entry.IsNewerThan(existing) {
-				return false, nil // Existing is newer
-			}
-			// Update existing entry
-			*existing = *entry
-			m.savedEntries = append(m.savedEntries, entry)
-			return true, nil
-		}
-	}
-
-	// Add new entry
-	m.entries = append(m.entries, entry)
-	m.savedEntries = append(m.savedEntries, entry)
-	return true, nil
-}
-
-func (m *mockDataStorage) GetUserEntriesSince(ctx context.Context, userID string, since int64) ([]*models.CRDTEntry, error) {
-	if m.getError != nil {
-		return nil, m.getError
-	}
-
-	var result []*models.CRDTEntry
-	for _, entry := range m.entries {
-		if entry.UserID == userID && entry.Timestamp > since {
-			result = append(result, entry)
-		}
-	}
-	return result, nil
-}
-
 func TestSyncHandler_HandleSync_MethodNotAllowed(t *testing.T) {
 	logger := setupTestLogger()
 	storage := &mockDataStorage{}
