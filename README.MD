@@ -68,8 +68,21 @@ go build -ldflags "-X main.Version=v1.0.0 -X 'main.BuildDate=$(date)' -X main.Gi
 
 ### Запуск сервера
 
+#### Production (с TLS)
+
 ```bash
-./gophkeeper-server --port 8080 --db gophkeeper.db --jwt-secret YOUR_SECRET_KEY
+./gophkeeper-server \
+  --port 8443 \
+  --db gophkeeper.db \
+  --jwt-secret YOUR_SECRET_KEY \
+  --tls-cert ./certs/server-cert.pem \
+  --tls-key ./certs/server-key.pem
+```
+
+#### Development (без TLS)
+
+```bash
+./gophkeeper-server --port 8080 --db gophkeeper.db --insecure
 ```
 
 Параметры:
@@ -77,7 +90,12 @@ go build -ldflags "-X main.Version=v1.0.0 -X 'main.BuildDate=$(date)' -X main.Gi
 - `--db` — путь к файлу базы данных SQLite (по умолчанию gophkeeper.db)
 - `--jwt-secret` — секретный ключ для JWT (если не указан, генерируется автоматически)
 - `--log-level` — уровень логирования: debug, info, warn, error (по умолчанию info)
+- `--tls-cert` — путь к TLS сертификату сервера (обязательно без `--insecure`)
+- `--tls-key` — путь к приватному ключу TLS сервера (обязательно без `--insecure`)
+- `--insecure` — запуск без TLS (только для разработки!)
 - `--version` — показать версию и информацию о сборке
+
+**⚠️ Важно:** В production всегда используйте TLS! Флаг `--insecure` предназначен только для локальной разработки.
 
 ### Клиент
 
@@ -92,7 +110,34 @@ gophkeeper [OPTIONS] COMMAND
 - `--db PATH` — путь к локальной базе данных (по умолчанию gophkeeper-client.db)
 - `--master-password PASSWORD` — мастер-пароль (не рекомендуется, используйте переменную окружения или файл)
 - `--master-password-file PATH` — путь к файлу с мастер-паролем
+- `--tls-ca PATH` — путь к CA сертификату для проверки самоподписанного сертификата сервера
+- `--insecure` — отключить проверку TLS сертификата (только для разработки!)
 - `--version` — показать версию и информацию о сборке
+
+#### Примеры подключения к серверу
+
+**Production с публичным сертификатом:**
+```bash
+gophkeeper --server https://gophkeeper.example.com:8443 login
+```
+
+**Development с самоподписанным сертификатом:**
+```bash
+# Генерируем сертификаты
+make certs
+
+# Подключаемся с CA сертификатом
+gophkeeper --server https://localhost:8443 --tls-ca ./certs/ca-cert.pem login
+```
+
+**Development без TLS (insecure mode):**
+```bash
+# Сервер запущен с --insecure
+gophkeeper --server http://localhost:8080 login
+
+# Или игнорируем ошибки TLS (не рекомендуется!)
+gophkeeper --server https://localhost:8443 --insecure login
+```
 
 #### Приоритет источников мастер-пароля
 
@@ -642,12 +687,27 @@ Access/Refresh Token (plaintext)
 
 ### Защита от атак
 
-1. **Rate Limiting**: 10 запросов/минуту на auth endpoints (защита от brute-force)
-2. **Password Policy**: минимум 12 символов для мастер-пароля
-3. **Username Policy**: 3-32 символа, alphanumeric + underscore
-4. **Token Rotation**: автоматическая ротация refresh tokens
-5. **Middleware Recovery**: перехват паник в HTTP handlers
-6. **HTTPS**: рекомендуется использовать TLS для production
+1. **TLS/HTTPS**: обязательное использование TLS 1.2+ в production для защиты от перехвата трафика
+2. **Rate Limiting**: 10 запросов/минуту на auth endpoints (защита от brute-force)
+3. **Password Policy**: минимум 12 символов для мастер-пароля
+4. **Username Policy**: 3-32 символа, alphanumeric + underscore
+5. **Token Rotation**: автоматическая ротация refresh tokens
+6. **Middleware Recovery**: перехват паник в HTTP handlers
+
+### TLS конфигурация
+
+**Сервер:**
+- Минимальная версия TLS: 1.2
+- Поддерживаемые cipher suites:
+  - `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`
+  - `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`
+  - `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384`
+  - `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256`
+
+**Клиент:**
+- Автоматическая проверка сертификата через системные CA (для публичных сертификатов)
+- Поддержка кастомного CA сертификата (для самоподписанных сертификатов)
+- Минимальная версия TLS: 1.2
 
 ---
 
@@ -854,6 +914,28 @@ Authorization: Bearer <access_token>
 ---
 
 ## Разработка и тестирование
+
+### Генерация TLS сертификатов для разработки
+
+Для локальной разработки можно сгенерировать самоподписанные сертификаты:
+
+```bash
+# Генерация CA и серверных сертификатов
+make certs
+```
+
+Эта команда создаст:
+- `./certs/ca-cert.pem` — CA сертификат (для клиента)
+- `./certs/ca-key.pem` — приватный ключ CA
+- `./certs/server-cert.pem` — сертификат сервера
+- `./certs/server-key.pem` — приватный ключ сервера
+
+Сертификаты действительны для `localhost` и `127.0.0.1`.
+
+**Очистка сертификатов:**
+```bash
+make clean-certs
+```
 
 ### Запуск тестов
 
