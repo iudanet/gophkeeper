@@ -44,7 +44,10 @@ test: test-unit ## Run all tests
 
 test-unit: ## Run unit tests
 	@echo "Running unit tests..."
-	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	$(GOTEST) -timeout=60s -race -covermode=atomic -coverprofile=coverage.out_tmp ./...
+	@grep -v "_mock.go" coverage.out_tmp > coverage.out
+	@rm coverage.out_tmp
+
 
 test-short: ## Run unit tests
 	@echo "Running unit tests..."
