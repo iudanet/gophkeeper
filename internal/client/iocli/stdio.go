@@ -43,3 +43,23 @@ func (s *Stdio) ReadPassword(prompt string) (string, error) {
 	}
 	return string(pwBytes), nil
 }
+
+func (s *Stdio) Write(p []byte) (n int, err error) {
+	// p содержит порцию байт, возможно без финального \n
+	// Делаем безопасную преобразование и выводим через Println
+	str := string(p)
+	lines := strings.Split(str, "\n")
+	for i, line := range lines {
+		if i < len(lines)-1 {
+			// Для всех строк кроме последней добавляем Println (с переводом строки)
+			s.Println(line)
+		} else {
+			// Последняя может быть неполная, выводим Printf без новой строки
+			if len(line) > 0 {
+				s.Printf("%s", line)
+			}
+		}
+	}
+
+	return len(p), nil
+}

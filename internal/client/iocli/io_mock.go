@@ -29,6 +29,9 @@ var _ IO = &IOMock{}
 //			ReadPasswordFunc: func(prompt string) (string, error) {
 //				panic("mock out the ReadPassword method")
 //			},
+//			WriteFunc: func(p []byte) (int, error) {
+//				panic("mock out the Write method")
+//			},
 //		}
 //
 //		// use mockedIO in code that requires IO
@@ -47,6 +50,9 @@ type IOMock struct {
 
 	// ReadPasswordFunc mocks the ReadPassword method.
 	ReadPasswordFunc func(prompt string) (string, error)
+
+	// WriteFunc mocks the Write method.
+	WriteFunc func(p []byte) (int, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -72,11 +78,17 @@ type IOMock struct {
 			// Prompt is the prompt argument value.
 			Prompt string
 		}
+		// Write holds details about calls to the Write method.
+		Write []struct {
+			// P is the p argument value.
+			P []byte
+		}
 	}
 	lockPrintf       sync.RWMutex
 	lockPrintln      sync.RWMutex
 	lockReadInput    sync.RWMutex
 	lockReadPassword sync.RWMutex
+	lockWrite        sync.RWMutex
 }
 
 // Printf calls PrintfFunc.
@@ -208,5 +220,37 @@ func (mock *IOMock) ReadPasswordCalls() []struct {
 	mock.lockReadPassword.RLock()
 	calls = mock.calls.ReadPassword
 	mock.lockReadPassword.RUnlock()
+	return calls
+}
+
+// Write calls WriteFunc.
+func (mock *IOMock) Write(p []byte) (int, error) {
+	if mock.WriteFunc == nil {
+		panic("IOMock.WriteFunc: method is nil but IO.Write was just called")
+	}
+	callInfo := struct {
+		P []byte
+	}{
+		P: p,
+	}
+	mock.lockWrite.Lock()
+	mock.calls.Write = append(mock.calls.Write, callInfo)
+	mock.lockWrite.Unlock()
+	return mock.WriteFunc(p)
+}
+
+// WriteCalls gets all the calls that were made to Write.
+// Check the length with:
+//
+//	len(mockedIO.WriteCalls())
+func (mock *IOMock) WriteCalls() []struct {
+	P []byte
+} {
+	var calls []struct {
+		P []byte
+	}
+	mock.lockWrite.RLock()
+	calls = mock.calls.Write
+	mock.lockWrite.RUnlock()
 	return calls
 }
