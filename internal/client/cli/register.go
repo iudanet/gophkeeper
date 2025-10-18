@@ -42,9 +42,9 @@ func (c *Cli) runRegister(ctx context.Context) error {
 
 	c.io.Println()
 	c.io.Println("✓ Registration successful!")
-	fmt.Printf("User ID: %s\n", result.UserID)
-	fmt.Printf("Username: %s\n", result.Username)
-	fmt.Printf("Device ID: %s\n", result.NodeID)
+	c.io.Printf("User ID: %s\n", result.UserID)
+	c.io.Printf("Username: %s\n", result.Username)
+	c.io.Printf("Device ID: %s\n", result.NodeID)
 	c.io.Println()
 	c.io.Println("⚠️  IMPORTANT: Remember your master password!")
 	c.io.Println("   If you lose it, you will NOT be able to recover your data.")

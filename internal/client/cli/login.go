@@ -54,8 +54,8 @@ func (c *Cli) runLogin(ctx context.Context) error {
 
 	c.io.Println()
 	c.io.Println("✓ Login successful!")
-	fmt.Printf("Username: %s\n", result.Username)
-	fmt.Printf("Access token expires in: %d seconds\n", result.ExpiresIn)
+	c.io.Printf("Username: %s\n", result.Username)
+	c.io.Printf("Access token expires in: %d seconds\n", result.ExpiresIn)
 	c.io.Println()
 	c.io.Println("Your session has been saved securely.")
 

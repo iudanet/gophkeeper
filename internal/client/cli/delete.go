@@ -48,10 +48,10 @@ func (c *Cli) deleteCredential(ctx context.Context, id string, credential *model
 	c.io.Println("=== Delete Credential ===")
 	c.io.Println()
 	c.io.Println("About to delete:")
-	fmt.Printf("  Name:  %s\n", credential.Name)
-	fmt.Printf("  Login: %s\n", credential.Login)
+	c.io.Printf("  Name:  %s\n", credential.Name)
+	c.io.Printf("  Login: %s\n", credential.Login)
 	if credential.URL != "" {
-		fmt.Printf("  URL:   %s\n", credential.URL)
+		c.io.Printf("  URL:   %s\n", credential.URL)
 	}
 	c.io.Println()
 
@@ -83,12 +83,12 @@ func (c *Cli) deleteTextData(ctx context.Context, id string, textData *models.Te
 	c.io.Println("=== Delete Text Data ===")
 	c.io.Println()
 	c.io.Println("About to delete:")
-	fmt.Printf("  Name: %s\n", textData.Name)
+	c.io.Printf("  Name: %s\n", textData.Name)
 	preview := textData.Content
 	if len(preview) > 50 {
 		preview = preview[:50] + "..."
 	}
-	fmt.Printf("  Preview: %s\n", preview)
+	c.io.Printf("  Preview: %s\n", preview)
 	c.io.Println()
 
 	confirm, err := c.io.ReadInput("Are you sure you want to delete this text data? (yes/no): ")
@@ -119,11 +119,11 @@ func (c *Cli) deleteBinaryData(ctx context.Context, id string, binaryData *model
 	c.io.Println("=== Delete Binary Data ===")
 	c.io.Println()
 	c.io.Println("About to delete:")
-	fmt.Printf("  Name:     %s\n", binaryData.Name)
+	c.io.Printf("  Name:     %s\n", binaryData.Name)
 	if filename, ok := binaryData.Metadata.CustomFields["filename"]; ok {
-		fmt.Printf("  Filename: %s\n", filename)
+		c.io.Printf("  Filename: %s\n", filename)
 	}
-	fmt.Printf("  Size:     %d bytes\n", len(binaryData.Data))
+	c.io.Printf("  Size:     %d bytes\n", len(binaryData.Data))
 	c.io.Println()
 
 	confirm, err := c.io.ReadInput("Are you sure you want to delete this file? (yes/no): ")
@@ -154,11 +154,11 @@ func (c *Cli) deleteCardData(ctx context.Context, id string, cardData *models.Ca
 	c.io.Println("=== Delete Card Data ===")
 	c.io.Println()
 	c.io.Println("About to delete:")
-	fmt.Printf("  Name:   %s\n", cardData.Name)
+	c.io.Printf("  Name:   %s\n", cardData.Name)
 	maskedNumber := maskCardNumber(cardData.Number)
-	fmt.Printf("  Number: %s\n", maskedNumber)
+	c.io.Printf("  Number: %s\n", maskedNumber)
 	if cardData.Holder != "" {
-		fmt.Printf("  Holder: %s\n", cardData.Holder)
+		c.io.Printf("  Holder: %s\n", cardData.Holder)
 	}
 	c.io.Println()
 

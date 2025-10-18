@@ -33,11 +33,11 @@ func (c *Cli) runStatus(ctx context.Context) error {
 	remaining := time.Until(expiresAt)
 
 	c.io.Println("Status: Authenticated")
-	fmt.Printf("Username: %s\n", authData.Username)
-	fmt.Printf("Token expires: %s\n", expiresAt.Format(time.RFC3339))
+	c.io.Printf("Username: %s\n", authData.Username)
+	c.io.Printf("Token expires: %s\n", expiresAt.Format(time.RFC3339))
 
 	if remaining > 0 {
-		fmt.Printf("Time remaining: %s\n", remaining.Round(time.Second))
+		c.io.Printf("Time remaining: %s\n", remaining.Round(time.Second))
 	} else {
 		c.io.Println("⚠️  Token has expired. Please login again.")
 	}
@@ -46,11 +46,11 @@ func (c *Cli) runStatus(ctx context.Context) error {
 	pendingCount, err := c.syncService.GetPendingSyncCount(ctx)
 	if err != nil {
 		// Не прерываем выполнение, просто логируем
-		fmt.Printf("\nWarning: Failed to get pending sync count: %v\n", err)
+		c.io.Printf("\nWarning: Failed to get pending sync count: %v\n", err)
 	} else {
 		c.io.Println()
 		if pendingCount > 0 {
-			fmt.Printf("⚠️  Pending sync: %d record(s) waiting to be synchronized\n", pendingCount)
+			c.io.Printf("⚠️  Pending sync: %d record(s) waiting to be synchronized\n", pendingCount)
 			c.io.Println("Run 'gophkeeper sync' to synchronize with server.")
 		} else {
 			c.io.Println("✓ All data synchronized with server")
