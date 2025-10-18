@@ -43,11 +43,14 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -v ./... -bench . -benchtime=1x
+      run: |
+        go test -timeout=60s -race -covermode=atomic -coverprofile=$GITHUB_WORKSPACE/profile.cov_tmp ./...
+        cat $GITHUB_WORKSPACE/profile.cov_tmp | grep -v "_mock.go" > $GITHUB_WORKSPACE/profile.cov
 
     - name: Update coverage report
       uses: ncruces/go-coverage-report@v0
       with:
+        coverage-file: $GITHUB_WORKSPACE/profile.cov
         report: true
         chart: true
         amend: true
