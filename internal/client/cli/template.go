@@ -116,3 +116,105 @@ Examples:
   gophkeeper delete b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5
   gophkeeper --server https://example.com login
 `
+
+const credentialsListTemplate = `
+=== Saved Credentials ===
+
+{{- if eq (len .) 0 }}
+No credentials found.
+
+Use 'gophkeeper add credential' to add your first credential.
+
+{{ else }}
+Found {{len .}} credential(s):
+
+{{- range . }}
+- {{ .Name }}
+   ID:    {{ .ID }}
+   Login: {{ .Login }}
+   {{- if .URL }}
+   URL:   {{ .URL }}
+   {{- end }}
+   {{- if .Notes }}
+   Notes: {{ .Notes }}
+   {{- end }}
+
+{{- end }}
+Note: Passwords are hidden for security. Use 'gophkeeper get <id>' to view full details.
+{{- end }}
+`
+
+const textDataListTemplate = `
+=== Saved Text Data ===
+
+{{- if eq (len .) 0 }}
+No text data found.
+
+Use 'gophkeeper add text' to add your first text entry.
+
+{{ else }}
+Found {{len .}} text entry(ies):
+
+{{- range . }}
+- {{ .Name }}
+   ID:      {{ .ID }}
+   Preview: {{ if gt (len .Content) 50 }}{{ printf "%.50s..." .Content }}{{ else }}{{ .Content }}{{ end }}
+
+{{- end }}
+Use 'gophkeeper get <id>' to view full content.
+{{- end }}
+`
+
+const binaryDataListTemplate = `
+=== Saved Binary Data ===
+
+{{- if eq (len .) 0 }}
+No binary data found.
+
+Use 'gophkeeper add binary' to add your first binary file.
+
+{{ else }}
+Found {{len .}} binary file(s):
+
+{{- range . }}
+- {{ .Name }}
+   ID:       {{ .ID }}
+   {{- with index .Metadata.CustomFields "filename" }}
+   Filename:  {{ . }}
+   {{- end }}
+   Size:     {{ len .Data }} bytes
+   {{- if .MimeType }}
+   Type:     {{ .MimeType }}
+   {{- end }}
+
+{{- end }}
+Use 'gophkeeper get <id>' to download the file.
+{{- end }}
+`
+
+const cardDataListTemplate = `
+=== Saved Card Data ===
+
+{{- if eq (len .) 0 }}
+No card data found.
+
+Use 'gophkeeper add card' to add your first card.
+
+{{ else }}
+Found {{len .}} card(s):
+
+{{- range . }}
+- {{ .Name }}
+   ID:     {{ .ID }}
+   Number: {{ .Number }}
+   {{- if .Holder }}
+   Holder:  {{ .Holder }}
+   {{- end }}
+   {{- if .Expiry }}
+   Expiry:  {{ .Expiry }}
+   {{- end }}
+
+{{- end }}
+Note: Card details are masked. Use 'gophkeeper get <id>' to view full details.
+{{- end }}
+`
