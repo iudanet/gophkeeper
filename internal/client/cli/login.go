@@ -13,7 +13,7 @@ func (c *Cli) runLogin(ctx context.Context) error {
 	fmt.Println()
 
 	// Запрашиваем username
-	username, err := readInput("Username: ")
+	username, err := c.io.ReadInput("Username: ")
 	if err != nil {
 		return fmt.Errorf("failed to read username: %w", err)
 	}

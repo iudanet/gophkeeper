@@ -55,7 +55,7 @@ func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 	fmt.Println()
 
 	// Запрашиваем данные credentials
-	name, err := readInput("Name (e.g., 'GitHub', 'Gmail'): ")
+	name, err := c.io.ReadInput("Name (e.g., 'GitHub', 'Gmail'): ")
 	if err != nil {
 		return fmt.Errorf("failed to read name: %w", err)
 	}
@@ -63,7 +63,7 @@ func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 		return fmt.Errorf("name cannot be empty")
 	}
 
-	login, err := readInput("Login/Email: ")
+	login, err := c.io.ReadInput("Login/Email: ")
 	if err != nil {
 		return fmt.Errorf("failed to read login: %w", err)
 	}
@@ -71,7 +71,7 @@ func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 		return fmt.Errorf("login cannot be empty")
 	}
 
-	password, err := readPassword("Password: ")
+	password, err := c.io.ReadPassword("Password: ")
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
 	}
@@ -79,12 +79,12 @@ func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 		return fmt.Errorf("password cannot be empty")
 	}
 
-	url, err := readInput("URL (optional): ")
+	url, err := c.io.ReadInput("URL (optional): ")
 	if err != nil {
 		return fmt.Errorf("failed to read URL: %w", err)
 	}
 
-	notes, err := readInput("Notes (optional): ")
+	notes, err := c.io.ReadInput("Notes (optional): ")
 	if err != nil {
 		return fmt.Errorf("failed to read notes: %w", err)
 	}
@@ -135,12 +135,12 @@ func (c *Cli) runAddText(ctx context.Context, autoSync bool) error {
 	fmt.Println("Enter text data details:")
 	fmt.Println()
 
-	name, err := readInput("Name (e.g., 'Secret Note'): ")
+	name, err := c.io.ReadInput("Name (e.g., 'Secret Note'): ")
 	if err != nil || name == "" {
 		return fmt.Errorf("name cannot be empty")
 	}
 
-	content, err := readInput("Content: ")
+	content, err := c.io.ReadInput("Content: ")
 	if err != nil || content == "" {
 		return fmt.Errorf("content cannot be empty")
 	}
@@ -184,32 +184,32 @@ func (c *Cli) runAddCard(ctx context.Context, autoSync bool) error {
 	fmt.Println("Enter card details:")
 	fmt.Println()
 
-	name, err := readInput("Card Name (e.g., 'Visa Gold'): ")
+	name, err := c.io.ReadInput("Card Name (e.g., 'Visa Gold'): ")
 	if err != nil || name == "" {
 		return fmt.Errorf("name cannot be empty")
 	}
 
-	number, err := readInput("Card Number: ")
+	number, err := c.io.ReadInput("Card Number: ")
 	if err != nil || number == "" {
 		return fmt.Errorf("card number cannot be empty")
 	}
 
-	holder, err := readInput("Card Holder: ")
+	holder, err := c.io.ReadInput("Card Holder: ")
 	if err != nil {
 		return fmt.Errorf("failed to read holder: %w", err)
 	}
 
-	expiry, err := readInput("Expiry (MM/YY): ")
+	expiry, err := c.io.ReadInput("Expiry (MM/YY): ")
 	if err != nil {
 		return fmt.Errorf("failed to read expiry: %w", err)
 	}
 
-	cvv, err := readPassword("CVV: ")
+	cvv, err := c.io.ReadPassword("CVV: ")
 	if err != nil {
 		return fmt.Errorf("failed to read CVV: %w", err)
 	}
 
-	pin, err := readPassword("PIN (optional): ")
+	pin, err := c.io.ReadPassword("PIN (optional): ")
 	if err != nil {
 		return fmt.Errorf("failed to read PIN: %w", err)
 	}
@@ -257,12 +257,12 @@ func (c *Cli) runAddBinary(ctx context.Context, autoSync bool) error {
 	fmt.Println("Enter binary file details:")
 	fmt.Println()
 
-	name, err := readInput("Name (e.g., 'Passport Scan'): ")
+	name, err := c.io.ReadInput("Name (e.g., 'Passport Scan'): ")
 	if err != nil || name == "" {
 		return fmt.Errorf("name cannot be empty")
 	}
 
-	filePath, err := readInput("File path: ")
+	filePath, err := c.io.ReadInput("File path: ")
 	if err != nil || filePath == "" {
 		return fmt.Errorf("file path cannot be empty")
 	}

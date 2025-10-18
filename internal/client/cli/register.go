@@ -10,19 +10,19 @@ func (c *Cli) runRegister(ctx context.Context) error {
 	fmt.Println()
 
 	// Запрашиваем username
-	username, err := readInput("Username: ")
+	username, err := c.io.ReadInput("Username: ")
 	if err != nil {
 		return fmt.Errorf("failed to read username: %w", err)
 	}
 
 	// Запрашиваем master password
-	masterPassword, err := readPassword("Master password (min 12 chars): ")
+	masterPassword, err := c.io.ReadPassword("Master password (min 12 chars): ")
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
 	}
 
 	// Подтверждение пароля
-	confirmPassword, err := readPassword("Confirm master password: ")
+	confirmPassword, err := c.io.ReadPassword("Confirm master password: ")
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}

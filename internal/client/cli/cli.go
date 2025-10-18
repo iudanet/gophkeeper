@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -14,7 +13,6 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/sync"
 	"github.com/iudanet/gophkeeper/internal/crypto"
 	"github.com/iudanet/gophkeeper/internal/validation"
-	"golang.org/x/term"
 )
 
 type Passwords struct {
@@ -23,6 +21,7 @@ type Passwords struct {
 }
 
 type Cli struct {
+	io            IO
 	apiClient     *api.Client
 	authService   *auth.AuthService
 	dataService   data.Service
@@ -32,8 +31,9 @@ type Cli struct {
 	encryptionKey []byte
 }
 
-func New(apiClient *api.Client, authService *auth.AuthService, dataService data.Service, syncService *sync.Service, pass *Passwords) *Cli {
+func New(apiClient *api.Client, authService *auth.AuthService, dataService data.Service, syncService *sync.Service, io IO, pass *Passwords) *Cli {
 	return &Cli{
+		io:          io,
 		apiClient:   apiClient,
 		authService: authService,
 		dataService: dataService,
@@ -120,7 +120,7 @@ func (c *Cli) getMasterPassword(passwords Passwords) (string, error) {
 	}
 
 	// Priority 4: Interactive prompt (fallback)
-	password, err := readPassword("Master password: ")
+	password, err := c.io.ReadPassword("Master password: ")
 	if err != nil {
 		return "", fmt.Errorf("failed to read password from stdin: %w", err)
 	}
@@ -188,27 +188,4 @@ func PrintUsage() {
 	fmt.Println("  gophkeeper get b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
 	fmt.Println("  gophkeeper delete b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
 	fmt.Println("  gophkeeper --server https://example.com login")
-}
-
-// readInput читает строку из stdin
-func readInput(prompt string) (string, error) {
-	fmt.Print(prompt)
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(input), nil
-}
-
-// readPassword читает пароль без отображения на экране
-func readPassword(prompt string) (string, error) {
-	fmt.Print(prompt)
-	fd := int(os.Stdin.Fd()) // Получаем файловый дескриптор стандартного ввода
-	passwordBytes, err := term.ReadPassword(fd)
-	fmt.Println() // Переход на новую строку после ввода пароля
-	if err != nil {
-		return "", err
-	}
-	return string(passwordBytes), nil
 }
