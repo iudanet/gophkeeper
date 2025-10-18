@@ -60,14 +60,14 @@ func (c *Cli) runSync(ctx context.Context) error {
 	c.io.Println()
 	c.io.Println("✓ Synchronization completed successfully!")
 	c.io.Println()
-	fmt.Printf("Pushed to server:   %d entries\n", result.PushedEntries)
-	fmt.Printf("Pulled from server: %d entries\n", result.PulledEntries)
-	fmt.Printf("Merged locally:     %d entries\n", result.MergedEntries)
+	c.io.Printf("Pushed to server:   %d entries\n", result.PushedEntries)
+	c.io.Printf("Pulled from server: %d entries\n", result.PulledEntries)
+	c.io.Printf("Merged locally:     %d entries\n", result.MergedEntries)
 	if result.Conflicts > 0 {
-		fmt.Printf("Conflicts resolved: %d\n", result.Conflicts)
+		c.io.Printf("Conflicts resolved: %d\n", result.Conflicts)
 	}
 	if result.SkippedEntries > 0 {
-		fmt.Printf("Skipped (errors):   %d\n", result.SkippedEntries)
+		c.io.Printf("Skipped (errors):   %d\n", result.SkippedEntries)
 	}
 
 	c.io.Println()

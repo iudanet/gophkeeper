@@ -43,18 +43,18 @@ func (c *Cli) runListCredentials(ctx context.Context) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d credential(s):\n", len(credentials))
+	c.io.Printf("Found %d credential(s):\n", len(credentials))
 	c.io.Println()
 
 	for i, cred := range credentials {
-		fmt.Printf("%d. %s\n", i+1, cred.Name)
-		fmt.Printf("   ID:    %s\n", cred.ID)
-		fmt.Printf("   Login: %s\n", cred.Login)
+		c.io.Printf("%d. %s\n", i+1, cred.Name)
+		c.io.Printf("   ID:    %s\n", cred.ID)
+		c.io.Printf("   Login: %s\n", cred.Login)
 		if cred.URL != "" {
-			fmt.Printf("   URL:   %s\n", cred.URL)
+			c.io.Printf("   URL:   %s\n", cred.URL)
 		}
 		if cred.Notes != "" {
-			fmt.Printf("   Notes: %s\n", cred.Notes)
+			c.io.Printf("   Notes: %s\n", cred.Notes)
 		}
 		c.io.Println()
 	}
@@ -80,18 +80,18 @@ func (c *Cli) runListText(ctx context.Context) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d text entry(ies):\n", len(textData))
+	c.io.Printf("Found %d text entry(ies):\n", len(textData))
 	c.io.Println()
 
 	for i, text := range textData {
-		fmt.Printf("%d. %s\n", i+1, text.Name)
-		fmt.Printf("   ID:      %s\n", text.ID)
+		c.io.Printf("%d. %s\n", i+1, text.Name)
+		c.io.Printf("   ID:      %s\n", text.ID)
 		// Показываем первые 50 символов содержимого
 		preview := text.Content
 		if len(preview) > 50 {
 			preview = preview[:50] + "..."
 		}
-		fmt.Printf("   Preview: %s\n", preview)
+		c.io.Printf("   Preview: %s\n", preview)
 		c.io.Println()
 	}
 
@@ -116,18 +116,18 @@ func (c *Cli) runListBinary(ctx context.Context) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d binary file(s):\n", len(binaryData))
+	c.io.Printf("Found %d binary file(s):\n", len(binaryData))
 	c.io.Println()
 
 	for i, binary := range binaryData {
-		fmt.Printf("%d. %s\n", i+1, binary.Name)
-		fmt.Printf("   ID:       %s\n", binary.ID)
+		c.io.Printf("%d. %s\n", i+1, binary.Name)
+		c.io.Printf("   ID:       %s\n", binary.ID)
 		if filename, ok := binary.Metadata.CustomFields["filename"]; ok {
-			fmt.Printf("   Filename: %s\n", filename)
+			c.io.Printf("   Filename: %s\n", filename)
 		}
-		fmt.Printf("   Size:     %d bytes\n", len(binary.Data))
+		c.io.Printf("   Size:     %d bytes\n", len(binary.Data))
 		if binary.MimeType != "" {
-			fmt.Printf("   Type:     %s\n", binary.MimeType)
+			c.io.Printf("   Type:     %s\n", binary.MimeType)
 		}
 		c.io.Println()
 	}
@@ -153,20 +153,20 @@ func (c *Cli) runListCards(ctx context.Context) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d card(s):\n", len(cardData))
+	c.io.Printf("Found %d card(s):\n", len(cardData))
 	c.io.Println()
 
 	for i, card := range cardData {
-		fmt.Printf("%d. %s\n", i+1, card.Name)
-		fmt.Printf("   ID:     %s\n", card.ID)
+		c.io.Printf("%d. %s\n", i+1, card.Name)
+		c.io.Printf("   ID:     %s\n", card.ID)
 		// Маскируем номер карты (показываем только последние 4 цифры)
 		maskedNumber := maskCardNumber(card.Number)
-		fmt.Printf("   Number: %s\n", maskedNumber)
+		c.io.Printf("   Number: %s\n", maskedNumber)
 		if card.Holder != "" {
-			fmt.Printf("   Holder: %s\n", card.Holder)
+			c.io.Printf("   Holder: %s\n", card.Holder)
 		}
 		if card.Expiry != "" {
-			fmt.Printf("   Expiry: %s\n", card.Expiry)
+			c.io.Printf("   Expiry: %s\n", card.Expiry)
 		}
 		c.io.Println()
 	}

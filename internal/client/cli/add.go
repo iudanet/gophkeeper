@@ -156,7 +156,7 @@ func (c *Cli) runAddText(ctx context.Context, autoSync bool) error {
 
 	c.io.Println()
 	c.io.Println("✓ Text data added successfully!")
-	fmt.Printf("Name: %s\n", name)
+	c.io.Printf("Name: %s\n", name)
 	c.io.Println()
 
 	// Автоматическая синхронизация если флаг установлен
@@ -229,7 +229,7 @@ func (c *Cli) runAddCard(ctx context.Context, autoSync bool) error {
 
 	c.io.Println()
 	c.io.Println("✓ Card added successfully!")
-	fmt.Printf("Name: %s\n", name)
+	c.io.Printf("Name: %s\n", name)
 	c.io.Println()
 
 	// Автоматическая синхронизация если флаг установлен
@@ -299,11 +299,11 @@ func (c *Cli) runAddBinary(ctx context.Context, autoSync bool) error {
 
 	c.io.Println()
 	c.io.Println("✓ File added successfully!")
-	fmt.Printf("Name:     %s\n", name)
+	c.io.Printf("Name:     %s\n", name)
 	if filename, ok := binaryData.Metadata.CustomFields["filename"]; ok {
-		fmt.Printf("Filename: %s\n", filename)
+		c.io.Printf("Filename: %s\n", filename)
 	}
-	fmt.Printf("Size:     %d bytes\n", len(content))
+	c.io.Printf("Size:     %d bytes\n", len(content))
 	c.io.Println()
 
 	// Автоматическая синхронизация если флаг установлен
