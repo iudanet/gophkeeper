@@ -48,6 +48,7 @@ func (c *Cli) runAdd(ctx context.Context, args []string) error {
 	}
 }
 
+// runAddCredential спрашивает данные через io, вызывает бизнес-логику и выводит результат
 func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 	c.io.Println("=== Add Credential ===")
 	c.io.Println()
