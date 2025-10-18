@@ -83,7 +83,8 @@ func main() {
 	syncService := sync.NewService(apiClient, boltStorage, boltStorage, logger)
 
 	// Создаем CLI с сервисами (без прямого доступа к storage)
-	commands := cli.New(apiClient, authService, dataService, syncService, &pass)
+	stdio := cli.NewStdio()
+	commands := cli.New(apiClient, authService, dataService, syncService, stdio, &pass)
 
 	command := args[0]
 	if command != "login" {

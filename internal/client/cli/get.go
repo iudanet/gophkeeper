@@ -94,7 +94,7 @@ func (c *Cli) displayBinaryData(binaryData *models.BinaryData) error {
 	fmt.Println()
 
 	// Спрашиваем где сохранить файл
-	savePath, err := readInput("Save to file (press Enter to skip): ")
+	savePath, err := c.io.ReadInput("Save to file (press Enter to skip): ")
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
 	}

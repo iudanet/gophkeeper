@@ -55,7 +55,7 @@ func (c *Cli) deleteCredential(ctx context.Context, id string, credential *model
 	}
 	fmt.Println()
 
-	confirm, err := readInput("Are you sure you want to delete this credential? (yes/no): ")
+	confirm, err := c.io.ReadInput("Are you sure you want to delete this credential? (yes/no): ")
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}
@@ -91,7 +91,7 @@ func (c *Cli) deleteTextData(ctx context.Context, id string, textData *models.Te
 	fmt.Printf("  Preview: %s\n", preview)
 	fmt.Println()
 
-	confirm, err := readInput("Are you sure you want to delete this text data? (yes/no): ")
+	confirm, err := c.io.ReadInput("Are you sure you want to delete this text data? (yes/no): ")
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}
@@ -126,7 +126,7 @@ func (c *Cli) deleteBinaryData(ctx context.Context, id string, binaryData *model
 	fmt.Printf("  Size:     %d bytes\n", len(binaryData.Data))
 	fmt.Println()
 
-	confirm, err := readInput("Are you sure you want to delete this file? (yes/no): ")
+	confirm, err := c.io.ReadInput("Are you sure you want to delete this file? (yes/no): ")
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}
@@ -162,7 +162,7 @@ func (c *Cli) deleteCardData(ctx context.Context, id string, cardData *models.Ca
 	}
 	fmt.Println()
 
-	confirm, err := readInput("Are you sure you want to delete this card? (yes/no): ")
+	confirm, err := c.io.ReadInput("Are you sure you want to delete this card? (yes/no): ")
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}
