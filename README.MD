@@ -1,4 +1,5 @@
-[![Go Coverage](https://github.com/iudanet/gophkeeper/wiki/coverage.svg)](https://raw.githack.com/wiki/iudanet/gophkeeper/coverage.html)
+[![Go Coverage](https://github.com/iudanet/gophkeeper/wiki/coverage.svg)](https://raw.githack.com/wiki/iudanet/gophkeeper/coverage.html) [![godoc](https://godoc.org/github.com/iudanet/gophkeeper?status.svg)](https://godoc.org/github.com/iudanet/gophkeeper)
+
 # GophKeeper
 
 **GophKeeper** — защищенная клиент-серверная система для хранения и синхронизации приватных данных (учетные данные, пароли, текстовые заметки, банковские карты, файлы).
