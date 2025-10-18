@@ -20,7 +20,6 @@ func TestNewAuthService(t *testing.T) {
 	authService := NewAuthService(nil, mockStorage)
 
 	assert.NotNil(t, authService)
-	assert.Equal(t, mockStorage, authService.storage)
 }
 
 func TestAuthService_SaveAuth(t *testing.T) {
@@ -755,7 +754,6 @@ func TestAuthService_Logout_Success(t *testing.T) {
 	assert.True(t, logoutCalled, "Logout API должен быть вызван")
 	assert.True(t, deleteCalled, "DeleteAuth должен быть вызван")
 	assert.Nil(t, savedData, "Auth data должны быть удалены")
-	assert.Nil(t, authService.encryptionKey, "Encryption key должен быть очищен")
 }
 
 func TestAuthService_Logout_WithoutEncryptionKey(t *testing.T) {

@@ -53,4 +53,7 @@ type Service interface {
 	// Logout выполняет выход из системы
 	// Удаляет локальные данные авторизации и опционально уведомляет сервер
 	Logout(ctx context.Context) error
+
+	// EnsureTokenValid проверяет срок жизни access token и обновляет его при необходимости
+	EnsureTokenValid(ctx context.Context) error
 }

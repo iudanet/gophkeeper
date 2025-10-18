@@ -25,15 +25,15 @@ type Passwords struct {
 type Cli struct {
 	io            iocli.IO
 	apiClient     *api.Client
-	authService   *auth.AuthService
+	authService   auth.Service
 	dataService   data.Service
-	syncService   *sync.Service
+	syncService   sync.Service
 	authData      *storage.AuthData
 	pass          *Passwords // временно храним. при возможности удаляем
 	encryptionKey []byte
 }
 
-func New(apiClient *api.Client, authService *auth.AuthService, dataService data.Service, syncService *sync.Service, io iocli.IO, pass *Passwords) *Cli {
+func New(apiClient *api.Client, authService auth.Service, dataService data.Service, syncService sync.Service, io iocli.IO, pass *Passwords) *Cli {
 	return &Cli{
 		io:          io,
 		apiClient:   apiClient,
