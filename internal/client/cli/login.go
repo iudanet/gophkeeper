@@ -9,8 +9,8 @@ import (
 )
 
 func (c *Cli) runLogin(ctx context.Context) error {
-	fmt.Println("=== Login ===")
-	fmt.Println()
+	c.io.Println("=== Login ===")
+	c.io.Println()
 
 	// Запрашиваем username
 	username, err := c.io.ReadInput("Username: ")
@@ -25,8 +25,8 @@ func (c *Cli) runLogin(ctx context.Context) error {
 	}
 	// очищаем пароли так как больше ненадо
 	c.pass = nil
-	fmt.Println()
-	fmt.Println("Authenticating...")
+	c.io.Println()
+	c.io.Println("Authenticating...")
 
 	// Логин через authService
 	result, err := c.authService.Login(ctx, username, pass)
@@ -52,12 +52,12 @@ func (c *Cli) runLogin(ctx context.Context) error {
 		return fmt.Errorf("failed to save auth data: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println("✓ Login successful!")
+	c.io.Println()
+	c.io.Println("✓ Login successful!")
 	fmt.Printf("Username: %s\n", result.Username)
 	fmt.Printf("Access token expires in: %d seconds\n", result.ExpiresIn)
-	fmt.Println()
-	fmt.Println("Your session has been saved securely.")
+	c.io.Println()
+	c.io.Println("Your session has been saved securely.")
 
 	return nil
 }

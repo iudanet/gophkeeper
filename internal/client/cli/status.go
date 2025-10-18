@@ -7,8 +7,8 @@ import (
 )
 
 func (c *Cli) runStatus(ctx context.Context) error {
-	fmt.Println("=== Authentication Status ===")
-	fmt.Println()
+	c.io.Println("=== Authentication Status ===")
+	c.io.Println()
 
 	// Проверяем наличие сохраненной сессии
 	isAuth, err := c.authService.IsAuthenticated(ctx)
@@ -17,9 +17,9 @@ func (c *Cli) runStatus(ctx context.Context) error {
 	}
 
 	if !isAuth {
-		fmt.Println("Status: Not authenticated")
-		fmt.Println()
-		fmt.Println("Run 'gophkeeper login' to authenticate.")
+		c.io.Println("Status: Not authenticated")
+		c.io.Println()
+		c.io.Println("Run 'gophkeeper login' to authenticate.")
 		return nil
 	}
 
@@ -32,14 +32,14 @@ func (c *Cli) runStatus(ctx context.Context) error {
 	expiresAt := time.Unix(authData.ExpiresAt, 0)
 	remaining := time.Until(expiresAt)
 
-	fmt.Println("Status: Authenticated")
+	c.io.Println("Status: Authenticated")
 	fmt.Printf("Username: %s\n", authData.Username)
 	fmt.Printf("Token expires: %s\n", expiresAt.Format(time.RFC3339))
 
 	if remaining > 0 {
 		fmt.Printf("Time remaining: %s\n", remaining.Round(time.Second))
 	} else {
-		fmt.Println("⚠️  Token has expired. Please login again.")
+		c.io.Println("⚠️  Token has expired. Please login again.")
 	}
 
 	// Получаем количество записей, ожидающих синхронизации
@@ -48,12 +48,12 @@ func (c *Cli) runStatus(ctx context.Context) error {
 		// Не прерываем выполнение, просто логируем
 		fmt.Printf("\nWarning: Failed to get pending sync count: %v\n", err)
 	} else {
-		fmt.Println()
+		c.io.Println()
 		if pendingCount > 0 {
 			fmt.Printf("⚠️  Pending sync: %d record(s) waiting to be synchronized\n", pendingCount)
-			fmt.Println("Run 'gophkeeper sync' to synchronize with server.")
+			c.io.Println("Run 'gophkeeper sync' to synchronize with server.")
 		} else {
-			fmt.Println("✓ All data synchronized with server")
+			c.io.Println("✓ All data synchronized with server")
 		}
 	}
 
