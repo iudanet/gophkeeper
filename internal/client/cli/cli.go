@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"text/template"
 
 	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
@@ -134,59 +135,16 @@ func (c *Cli) getMasterPassword(passwords Passwords) (string, error) {
 	return password, nil
 }
 
+func (c *Cli) printTemplate(tmplStr string, data interface{}) error {
+	tmpl, err := template.New("output").Parse(tmplStr)
+	if err != nil {
+		return err
+	}
+
+	return tmpl.Execute(c.io, data)
+}
+
 func PrintUsage() {
-	fmt.Println("GophKeeper Client")
-	fmt.Println()
-	fmt.Println("Usage:")
-	fmt.Println("  gophkeeper [OPTIONS] COMMAND")
-	fmt.Println()
-	fmt.Println("Options:")
-	fmt.Println("  --version                    Show version information")
-	fmt.Println("  --server URL                 Server URL (default: http://localhost:8080)")
-	fmt.Println("  --db PATH                    Path to local database (default: gophkeeper-client.db)")
-	fmt.Println("  --master-password PASSWORD   Master password (not recommended, use env var or file)")
-	fmt.Println("  --master-password-file PATH  Path to file containing master password")
-	fmt.Println()
-	fmt.Println("Master Password Priority (highest to lowest):")
-	fmt.Println("  1. GOPHKEEPER_MASTER_PASSWORD environment variable")
-	fmt.Println("  2. --master-password-file (file path)")
-	fmt.Println("  3. --master-password (command line)")
-	fmt.Println("  4. Interactive prompt (fallback)")
-	fmt.Println()
-	fmt.Println("Commands:")
-	fmt.Println("  register                Register new user")
-	fmt.Println("  login                   Login to server")
-	fmt.Println("  logout                  Logout from server")
-	fmt.Println("  status                  Show authentication status")
-	fmt.Println("  add <type>              Add new data (credential, text, binary, card)")
-	fmt.Println("  list <type>             List saved data (credentials, text, binary, cards)")
-	fmt.Println("  get <id>                Show full data details")
-	fmt.Println("  delete <id>             Delete data (soft delete)")
-	fmt.Println("  sync                    Synchronize local data with server")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  # Interactive password prompt")
-	fmt.Println("  gophkeeper register")
-	fmt.Println("  gophkeeper login")
-	fmt.Println("  gophkeeper list credentials")
-	fmt.Println()
-	fmt.Println("  # Using environment variable (recommended)")
-	fmt.Println("  export GOPHKEEPER_MASTER_PASSWORD='mySecretPassword123'")
-	fmt.Println("  gophkeeper sync")
-	fmt.Println()
-	fmt.Println("  # Using password file (for automation)")
-	fmt.Println("  echo 'mySecretPassword123' > ~/.gophkeeper-password")
-	fmt.Println("  chmod 600 ~/.gophkeeper-password")
-	fmt.Println("  gophkeeper --master-password-file ~/.gophkeeper-password sync")
-	fmt.Println()
-	fmt.Println("  # Using command line parameter (not recommended)")
-	fmt.Println("  gophkeeper --master-password 'mySecretPassword123' add credential")
-	fmt.Println()
-	fmt.Println("  # Other examples")
-	fmt.Println("  gophkeeper add text")
-	fmt.Println("  gophkeeper add binary")
-	fmt.Println("  gophkeeper add card")
-	fmt.Println("  gophkeeper get b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
-	fmt.Println("  gophkeeper delete b692f5c0-2d88-4aa1-a9e1-13aa6e4976d5")
-	fmt.Println("  gophkeeper --server https://example.com login")
+	tmpl := template.Must(template.New("usage").Parse(usageTemplate))
+	_ = tmpl.Execute(os.Stdout, nil)
 }
