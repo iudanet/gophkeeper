@@ -9,6 +9,7 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/data"
+	"github.com/iudanet/gophkeeper/internal/client/iocli"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/client/sync"
 	"github.com/iudanet/gophkeeper/internal/crypto"
@@ -21,7 +22,7 @@ type Passwords struct {
 }
 
 type Cli struct {
-	io            IO
+	io            iocli.IO
 	apiClient     *api.Client
 	authService   *auth.AuthService
 	dataService   data.Service
@@ -31,7 +32,7 @@ type Cli struct {
 	encryptionKey []byte
 }
 
-func New(apiClient *api.Client, authService *auth.AuthService, dataService data.Service, syncService *sync.Service, io IO, pass *Passwords) *Cli {
+func New(apiClient *api.Client, authService *auth.AuthService, dataService data.Service, syncService *sync.Service, io iocli.IO, pass *Passwords) *Cli {
 	return &Cli{
 		io:          io,
 		apiClient:   apiClient,
