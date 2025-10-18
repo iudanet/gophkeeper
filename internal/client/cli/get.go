@@ -44,8 +44,8 @@ func (c *Cli) runGet(ctx context.Context, args []string) error {
 }
 
 func (c *Cli) displayCredential(credential *models.Credential) error {
-	fmt.Println("=== Credential Details ===")
-	fmt.Println()
+	c.io.Println("=== Credential Details ===")
+	c.io.Println()
 
 	fmt.Printf("Name:     %s\n", credential.Name)
 	fmt.Printf("ID:       %s\n", credential.ID)
@@ -57,30 +57,30 @@ func (c *Cli) displayCredential(credential *models.Credential) error {
 	if credential.Notes != "" {
 		fmt.Printf("Notes:    %s\n", credential.Notes)
 	}
-	fmt.Println()
+	c.io.Println()
 
 	return nil
 }
 
 func (c *Cli) displayTextData(textData *models.TextData) error {
-	fmt.Println("=== Text Data Details ===")
-	fmt.Println()
+	c.io.Println("=== Text Data Details ===")
+	c.io.Println()
 
 	fmt.Printf("Name:    %s\n", textData.Name)
 	fmt.Printf("ID:      %s\n", textData.ID)
-	fmt.Println()
-	fmt.Println("Content:")
-	fmt.Println("---")
-	fmt.Println(textData.Content)
-	fmt.Println("---")
-	fmt.Println()
+	c.io.Println()
+	c.io.Println("Content:")
+	c.io.Println("---")
+	c.io.Println(textData.Content)
+	c.io.Println("---")
+	c.io.Println()
 
 	return nil
 }
 
 func (c *Cli) displayBinaryData(binaryData *models.BinaryData) error {
-	fmt.Println("=== Binary Data Details ===")
-	fmt.Println()
+	c.io.Println("=== Binary Data Details ===")
+	c.io.Println()
 
 	fmt.Printf("Name:     %s\n", binaryData.Name)
 	fmt.Printf("ID:       %s\n", binaryData.ID)
@@ -91,7 +91,7 @@ func (c *Cli) displayBinaryData(binaryData *models.BinaryData) error {
 	if binaryData.MimeType != "" {
 		fmt.Printf("Type:     %s\n", binaryData.MimeType)
 	}
-	fmt.Println()
+	c.io.Println()
 
 	// Спрашиваем где сохранить файл
 	savePath, err := c.io.ReadInput("Save to file (press Enter to skip): ")
@@ -106,14 +106,14 @@ func (c *Cli) displayBinaryData(binaryData *models.BinaryData) error {
 		}
 		fmt.Printf("✓ File saved to: %s\n", savePath)
 	}
-	fmt.Println()
+	c.io.Println()
 
 	return nil
 }
 
 func (c *Cli) displayCardData(card *models.CardData) error {
-	fmt.Println("=== Card Data Details ===")
-	fmt.Println()
+	c.io.Println("=== Card Data Details ===")
+	c.io.Println()
 
 	fmt.Printf("Name:   %s\n", card.Name)
 	fmt.Printf("ID:     %s\n", card.ID)
@@ -130,7 +130,7 @@ func (c *Cli) displayCardData(card *models.CardData) error {
 	if card.PIN != "" {
 		fmt.Printf("PIN:    %s\n", card.PIN)
 	}
-	fmt.Println()
+	c.io.Println()
 
 	return nil
 }

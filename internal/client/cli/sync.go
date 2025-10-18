@@ -7,7 +7,7 @@ import (
 )
 
 func (c *Cli) runSync(ctx context.Context) error {
-	fmt.Println("=== Synchronization ===")
+	c.io.Println("=== Synchronization ===")
 
 	// Используем уже расшифрованный access token из c.authData
 	// (он был расшифрован в ReadMasterPassword)
@@ -23,8 +23,8 @@ func (c *Cli) runSync(ctx context.Context) error {
 
 	// Если токен истёк или скоро истечёт - обновляем через refresh token
 	if now.Add(bufferTime).After(expiresAt) {
-		fmt.Println()
-		fmt.Println("Access token expired or expiring soon, refreshing...")
+		c.io.Println()
+		c.io.Println("Access token expired or expiring soon, refreshing...")
 
 		// Вызываем authService.RefreshToken()
 		if err := c.authService.RefreshToken(ctx); err != nil {
@@ -40,13 +40,13 @@ func (c *Cli) runSync(ctx context.Context) error {
 		// Обновляем c.authData для использования в sync
 		c.authData = updatedAuthData
 
-		fmt.Println("✓ Access token refreshed successfully")
+		c.io.Println("✓ Access token refreshed successfully")
 	}
 
 	accessToken := c.authData.AccessToken
 
-	fmt.Println()
-	fmt.Println("Starting synchronization with server...")
+	c.io.Println()
+	c.io.Println("Starting synchronization with server...")
 
 	// Получаем userID
 	userID := c.authData.UserID
@@ -57,9 +57,9 @@ func (c *Cli) runSync(ctx context.Context) error {
 		return fmt.Errorf("synchronization failed: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println("✓ Synchronization completed successfully!")
-	fmt.Println()
+	c.io.Println()
+	c.io.Println("✓ Synchronization completed successfully!")
+	c.io.Println()
 	fmt.Printf("Pushed to server:   %d entries\n", result.PushedEntries)
 	fmt.Printf("Pulled from server: %d entries\n", result.PulledEntries)
 	fmt.Printf("Merged locally:     %d entries\n", result.MergedEntries)
@@ -70,8 +70,8 @@ func (c *Cli) runSync(ctx context.Context) error {
 		fmt.Printf("Skipped (errors):   %d\n", result.SkippedEntries)
 	}
 
-	fmt.Println()
-	fmt.Println("Your data is now synchronized with the server.")
+	c.io.Println()
+	c.io.Println("Your data is now synchronized with the server.")
 
 	return nil
 }

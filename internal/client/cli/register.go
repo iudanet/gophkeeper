@@ -6,8 +6,8 @@ import (
 )
 
 func (c *Cli) runRegister(ctx context.Context) error {
-	fmt.Println("=== Registration ===")
-	fmt.Println()
+	c.io.Println("=== Registration ===")
+	c.io.Println()
 
 	// Запрашиваем username
 	username, err := c.io.ReadInput("Username: ")
@@ -31,8 +31,8 @@ func (c *Cli) runRegister(ctx context.Context) error {
 		return fmt.Errorf("passwords do not match")
 	}
 
-	fmt.Println()
-	fmt.Println("Registering user...")
+	c.io.Println()
+	c.io.Println("Registering user...")
 
 	// Регистрация через authService
 	result, err := c.authService.Register(ctx, username, masterPassword)
@@ -40,16 +40,16 @@ func (c *Cli) runRegister(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Println()
-	fmt.Println("✓ Registration successful!")
+	c.io.Println()
+	c.io.Println("✓ Registration successful!")
 	fmt.Printf("User ID: %s\n", result.UserID)
 	fmt.Printf("Username: %s\n", result.Username)
 	fmt.Printf("Device ID: %s\n", result.NodeID)
-	fmt.Println()
-	fmt.Println("⚠️  IMPORTANT: Remember your master password!")
-	fmt.Println("   If you lose it, you will NOT be able to recover your data.")
-	fmt.Println()
-	fmt.Println("Please run 'gophkeeper login' to start using the service.")
+	c.io.Println()
+	c.io.Println("⚠️  IMPORTANT: Remember your master password!")
+	c.io.Println("   If you lose it, you will NOT be able to recover your data.")
+	c.io.Println()
+	c.io.Println("Please run 'gophkeeper login' to start using the service.")
 
 	return nil
 }

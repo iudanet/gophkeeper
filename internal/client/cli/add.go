@@ -49,12 +49,11 @@ func (c *Cli) runAdd(ctx context.Context, args []string) error {
 }
 
 func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
-	fmt.Println("=== Add Credential ===")
-	fmt.Println()
-	fmt.Println("Enter credential details:")
-	fmt.Println()
+	c.io.Println("=== Add Credential ===")
+	c.io.Println()
+	c.io.Println("Enter credential details:")
+	c.io.Println()
 
-	// Запрашиваем данные credentials
 	name, err := c.io.ReadInput("Name (e.g., 'GitHub', 'Gmail'): ")
 	if err != nil {
 		return fmt.Errorf("failed to read name: %w", err)
@@ -89,7 +88,6 @@ func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 		return fmt.Errorf("failed to read notes: %w", err)
 	}
 
-	// Создаем credential
 	cred := &models.Credential{
 		Name:     name,
 		Login:    login,
@@ -102,38 +100,34 @@ func (c *Cli) runAddCredential(ctx context.Context, autoSync bool) error {
 		},
 	}
 
-	// Используем UserID из authData
 	userID := c.authData.UserID
 
-	// Добавляем credential через data service
 	if err := c.dataService.AddCredential(ctx, userID, c.authData.NodeID, c.encryptionKey, cred); err != nil {
 		return fmt.Errorf("failed to add credential: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println("✓ Credential added successfully!")
-	fmt.Printf("Name: %s\n", name)
-	fmt.Printf("Login: %s\n", login)
-	fmt.Println()
+	c.io.Println()
+	c.io.Println("✓ Credential added successfully!")
+	c.io.Printf("Name: %s\n", name)
+	c.io.Printf("Login: %s\n", login)
+	c.io.Println()
 
-	// Автоматическая синхронизация если флаг установлен
 	if autoSync {
-		fmt.Println("Syncing with server...")
+		c.io.Println("Syncing with server...")
 		if err := c.runSync(ctx); err != nil {
 			return fmt.Errorf("failed to sync: %w", err)
 		}
 	} else {
-		fmt.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server.")
+		c.io.Println("Note: Credential is stored locally. Run 'gophkeeper sync' to sync with server.")
 	}
-
 	return nil
 }
 
 func (c *Cli) runAddText(ctx context.Context, autoSync bool) error {
-	fmt.Println("=== Add Text Data ===")
-	fmt.Println()
-	fmt.Println("Enter text data details:")
-	fmt.Println()
+	c.io.Println("=== Add Text Data ===")
+	c.io.Println()
+	c.io.Println("Enter text data details:")
+	c.io.Println()
 
 	name, err := c.io.ReadInput("Name (e.g., 'Secret Note'): ")
 	if err != nil || name == "" {
@@ -160,29 +154,29 @@ func (c *Cli) runAddText(ctx context.Context, autoSync bool) error {
 		return fmt.Errorf("failed to add text data: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println("✓ Text data added successfully!")
+	c.io.Println()
+	c.io.Println("✓ Text data added successfully!")
 	fmt.Printf("Name: %s\n", name)
-	fmt.Println()
+	c.io.Println()
 
 	// Автоматическая синхронизация если флаг установлен
 	if autoSync {
-		fmt.Println("Syncing with server...")
+		c.io.Println("Syncing with server...")
 		if err := c.runSync(ctx); err != nil {
 			return fmt.Errorf("failed to sync: %w", err)
 		}
 	} else {
-		fmt.Println("Note: Data is stored locally. Run 'gophkeeper sync' to sync with server.")
+		c.io.Println("Note: Data is stored locally. Run 'gophkeeper sync' to sync with server.")
 	}
 
 	return nil
 }
 
 func (c *Cli) runAddCard(ctx context.Context, autoSync bool) error {
-	fmt.Println("=== Add Card Data ===")
-	fmt.Println()
-	fmt.Println("Enter card details:")
-	fmt.Println()
+	c.io.Println("=== Add Card Data ===")
+	c.io.Println()
+	c.io.Println("Enter card details:")
+	c.io.Println()
 
 	name, err := c.io.ReadInput("Card Name (e.g., 'Visa Gold'): ")
 	if err != nil || name == "" {
@@ -233,29 +227,29 @@ func (c *Cli) runAddCard(ctx context.Context, autoSync bool) error {
 		return fmt.Errorf("failed to add card: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println("✓ Card added successfully!")
+	c.io.Println()
+	c.io.Println("✓ Card added successfully!")
 	fmt.Printf("Name: %s\n", name)
-	fmt.Println()
+	c.io.Println()
 
 	// Автоматическая синхронизация если флаг установлен
 	if autoSync {
-		fmt.Println("Syncing with server...")
+		c.io.Println("Syncing with server...")
 		if err := c.runSync(ctx); err != nil {
 			return fmt.Errorf("failed to sync: %w", err)
 		}
 	} else {
-		fmt.Println("Note: Card is stored locally. Run 'gophkeeper sync' to sync with server.")
+		c.io.Println("Note: Card is stored locally. Run 'gophkeeper sync' to sync with server.")
 	}
 
 	return nil
 }
 
 func (c *Cli) runAddBinary(ctx context.Context, autoSync bool) error {
-	fmt.Println("=== Add Binary Data ===")
-	fmt.Println()
-	fmt.Println("Enter binary file details:")
-	fmt.Println()
+	c.io.Println("=== Add Binary Data ===")
+	c.io.Println()
+	c.io.Println("Enter binary file details:")
+	c.io.Println()
 
 	name, err := c.io.ReadInput("Name (e.g., 'Passport Scan'): ")
 	if err != nil || name == "" {
@@ -303,23 +297,23 @@ func (c *Cli) runAddBinary(ctx context.Context, autoSync bool) error {
 		return fmt.Errorf("failed to add binary data: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println("✓ File added successfully!")
+	c.io.Println()
+	c.io.Println("✓ File added successfully!")
 	fmt.Printf("Name:     %s\n", name)
 	if filename, ok := binaryData.Metadata.CustomFields["filename"]; ok {
 		fmt.Printf("Filename: %s\n", filename)
 	}
 	fmt.Printf("Size:     %d bytes\n", len(content))
-	fmt.Println()
+	c.io.Println()
 
 	// Автоматическая синхронизация если флаг установлен
 	if autoSync {
-		fmt.Println("Syncing with server...")
+		c.io.Println("Syncing with server...")
 		if err := c.runSync(ctx); err != nil {
 			return fmt.Errorf("failed to sync: %w", err)
 		}
 	} else {
-		fmt.Println("Note: File is stored locally. Run 'gophkeeper sync' to sync with server.")
+		c.io.Println("Note: File is stored locally. Run 'gophkeeper sync' to sync with server.")
 	}
 
 	return nil

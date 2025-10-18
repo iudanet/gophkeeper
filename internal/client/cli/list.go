@@ -28,7 +28,7 @@ func (c *Cli) runList(ctx context.Context, args []string) error {
 }
 
 func (c *Cli) runListCredentials(ctx context.Context) error {
-	fmt.Println("=== Saved Credentials ===")
+	c.io.Println("=== Saved Credentials ===")
 
 	// Получаем список credentials через data service
 	credentials, err := c.dataService.ListCredentials(ctx, c.encryptionKey)
@@ -37,14 +37,14 @@ func (c *Cli) runListCredentials(ctx context.Context) error {
 	}
 
 	if len(credentials) == 0 {
-		fmt.Println("No credentials found.")
-		fmt.Println()
-		fmt.Println("Use 'gophkeeper add credential' to add your first credential.")
+		c.io.Println("No credentials found.")
+		c.io.Println()
+		c.io.Println("Use 'gophkeeper add credential' to add your first credential.")
 		return nil
 	}
 
 	fmt.Printf("Found %d credential(s):\n", len(credentials))
-	fmt.Println()
+	c.io.Println()
 
 	for i, cred := range credentials {
 		fmt.Printf("%d. %s\n", i+1, cred.Name)
@@ -56,16 +56,16 @@ func (c *Cli) runListCredentials(ctx context.Context) error {
 		if cred.Notes != "" {
 			fmt.Printf("   Notes: %s\n", cred.Notes)
 		}
-		fmt.Println()
+		c.io.Println()
 	}
 
-	fmt.Println("Note: Passwords are hidden for security. Use 'gophkeeper get <id>' to view full details.")
+	c.io.Println("Note: Passwords are hidden for security. Use 'gophkeeper get <id>' to view full details.")
 
 	return nil
 }
 
 func (c *Cli) runListText(ctx context.Context) error {
-	fmt.Println("=== Saved Text Data ===")
+	c.io.Println("=== Saved Text Data ===")
 
 	// Получаем список text data через data service
 	textData, err := c.dataService.ListTextData(ctx, c.encryptionKey)
@@ -74,14 +74,14 @@ func (c *Cli) runListText(ctx context.Context) error {
 	}
 
 	if len(textData) == 0 {
-		fmt.Println("No text data found.")
-		fmt.Println()
-		fmt.Println("Use 'gophkeeper add text' to add your first text entry.")
+		c.io.Println("No text data found.")
+		c.io.Println()
+		c.io.Println("Use 'gophkeeper add text' to add your first text entry.")
 		return nil
 	}
 
 	fmt.Printf("Found %d text entry(ies):\n", len(textData))
-	fmt.Println()
+	c.io.Println()
 
 	for i, text := range textData {
 		fmt.Printf("%d. %s\n", i+1, text.Name)
@@ -92,16 +92,16 @@ func (c *Cli) runListText(ctx context.Context) error {
 			preview = preview[:50] + "..."
 		}
 		fmt.Printf("   Preview: %s\n", preview)
-		fmt.Println()
+		c.io.Println()
 	}
 
-	fmt.Println("Use 'gophkeeper get <id>' to view full content.")
+	c.io.Println("Use 'gophkeeper get <id>' to view full content.")
 
 	return nil
 }
 
 func (c *Cli) runListBinary(ctx context.Context) error {
-	fmt.Println("=== Saved Binary Data ===")
+	c.io.Println("=== Saved Binary Data ===")
 
 	// Получаем список binary data через data service
 	binaryData, err := c.dataService.ListBinaryData(ctx, c.encryptionKey)
@@ -110,14 +110,14 @@ func (c *Cli) runListBinary(ctx context.Context) error {
 	}
 
 	if len(binaryData) == 0 {
-		fmt.Println("No binary data found.")
-		fmt.Println()
-		fmt.Println("Use 'gophkeeper add binary' to add your first binary file.")
+		c.io.Println("No binary data found.")
+		c.io.Println()
+		c.io.Println("Use 'gophkeeper add binary' to add your first binary file.")
 		return nil
 	}
 
 	fmt.Printf("Found %d binary file(s):\n", len(binaryData))
-	fmt.Println()
+	c.io.Println()
 
 	for i, binary := range binaryData {
 		fmt.Printf("%d. %s\n", i+1, binary.Name)
@@ -129,16 +129,16 @@ func (c *Cli) runListBinary(ctx context.Context) error {
 		if binary.MimeType != "" {
 			fmt.Printf("   Type:     %s\n", binary.MimeType)
 		}
-		fmt.Println()
+		c.io.Println()
 	}
 
-	fmt.Println("Use 'gophkeeper get <id>' to download the file.")
+	c.io.Println("Use 'gophkeeper get <id>' to download the file.")
 
 	return nil
 }
 
 func (c *Cli) runListCards(ctx context.Context) error {
-	fmt.Println("=== Saved Card Data ===")
+	c.io.Println("=== Saved Card Data ===")
 
 	// Получаем список card data через data service
 	cardData, err := c.dataService.ListCardData(ctx, c.encryptionKey)
@@ -147,14 +147,14 @@ func (c *Cli) runListCards(ctx context.Context) error {
 	}
 
 	if len(cardData) == 0 {
-		fmt.Println("No card data found.")
-		fmt.Println()
-		fmt.Println("Use 'gophkeeper add card' to add your first card.")
+		c.io.Println("No card data found.")
+		c.io.Println()
+		c.io.Println("Use 'gophkeeper add card' to add your first card.")
 		return nil
 	}
 
 	fmt.Printf("Found %d card(s):\n", len(cardData))
-	fmt.Println()
+	c.io.Println()
 
 	for i, card := range cardData {
 		fmt.Printf("%d. %s\n", i+1, card.Name)
@@ -168,10 +168,10 @@ func (c *Cli) runListCards(ctx context.Context) error {
 		if card.Expiry != "" {
 			fmt.Printf("   Expiry: %s\n", card.Expiry)
 		}
-		fmt.Println()
+		c.io.Println()
 	}
 
-	fmt.Println("Note: Card details are masked. Use 'gophkeeper get <id>' to view full details.")
+	c.io.Println("Note: Card details are masked. Use 'gophkeeper get <id>' to view full details.")
 
 	return nil
 }
