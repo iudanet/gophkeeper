@@ -27,18 +27,18 @@ type APIClient interface {
 
 // AuthService предоставляет функции авторизации и управления сессией
 // Ключ шифрования устанавливается через SetEncryptionKey после успешного Login/Register
-type AuthService struct {
+type authService struct {
 	apiClient     APIClient
 	storage       storage.AuthStorage
 	encryptionKey []byte // опциональный ключ шифрования (устанавливается после login)
 }
 
-// Compile-time check that AuthService implements Service
-var _ Service = (*AuthService)(nil)
+// Compile-time check that authService implements Service
+var _ Service = (*authService)(nil)
 
 // NewAuthService создает новый сервис авторизации
-func NewAuthService(apiClient APIClient, storage storage.AuthStorage) *AuthService {
-	return &AuthService{
+func NewAuthService(apiClient APIClient, storage storage.AuthStorage) Service {
+	return &authService{
 		apiClient: apiClient,
 		storage:   storage,
 	}
@@ -46,7 +46,7 @@ func NewAuthService(apiClient APIClient, storage storage.AuthStorage) *AuthServi
 
 // SetEncryptionKey устанавливает ключ шифрования для работы с хранилищем
 // Должен быть вызван после успешного Login/Register
-func (s *AuthService) SetEncryptionKey(key []byte) {
+func (s *authService) SetEncryptionKey(key []byte) {
 	s.encryptionKey = key
 }
 
@@ -61,7 +61,7 @@ type RegisterResult struct {
 
 // Register регистрирует нового пользователя
 // Возвращает результат с ключом шифрования для использования
-func (s *AuthService) Register(ctx context.Context, username, masterPassword string) (*RegisterResult, error) {
+func (s *authService) Register(ctx context.Context, username, masterPassword string) (*RegisterResult, error) {
 	// Валидация входных данных
 	if err := validation.ValidateUsername(username); err != nil {
 		return nil, fmt.Errorf("invalid username: %w", err)
@@ -127,7 +127,7 @@ type LoginResult struct {
 
 // Login выполняет аутентификацию пользователя
 // Возвращает результат с токенами и ключом шифрования
-func (s *AuthService) Login(ctx context.Context, username, masterPassword string) (*LoginResult, error) {
+func (s *authService) Login(ctx context.Context, username, masterPassword string) (*LoginResult, error) {
 	// Валидация username
 	if err := validation.ValidateUsername(username); err != nil {
 		return nil, fmt.Errorf("invalid username: %w", err)
@@ -186,7 +186,7 @@ func (s *AuthService) Login(ctx context.Context, username, masterPassword string
 
 // SaveAuth сохраняет незашифрованные auth данные,
 // сервис сам зашифрует токены и передаст в хранилище
-func (s *AuthService) SaveAuth(ctx context.Context, auth *storage.AuthData) error {
+func (s *authService) SaveAuth(ctx context.Context, auth *storage.AuthData) error {
 	if auth == nil {
 		return fmt.Errorf("auth data is nil")
 	}
@@ -216,7 +216,7 @@ func (s *AuthService) SaveAuth(ctx context.Context, auth *storage.AuthData) erro
 }
 
 // GetAuthDecryptData загружает данные из storage и расшифровывает токены
-func (s *AuthService) GetAuthDecryptData(ctx context.Context) (*storage.AuthData, error) {
+func (s *authService) GetAuthDecryptData(ctx context.Context) (*storage.AuthData, error) {
 	if s.encryptionKey == nil {
 		return nil, fmt.Errorf("encryption key not set, call SetEncryptionKey first")
 	}
@@ -257,23 +257,23 @@ func (s *AuthService) GetAuthDecryptData(ctx context.Context) (*storage.AuthData
 
 // GetAuthEncryptData загружает данные из storage БЕЗ расшифровки токенов
 // Используется для получения username и public salt без необходимости в ключе
-func (s *AuthService) GetAuthEncryptData(ctx context.Context) (*storage.AuthData, error) {
+func (s *authService) GetAuthEncryptData(ctx context.Context) (*storage.AuthData, error) {
 	return s.storage.GetAuth(ctx)
 }
 
 // DeleteAuth удаляет данные
-func (s *AuthService) DeleteAuth(ctx context.Context) error {
+func (s *authService) DeleteAuth(ctx context.Context) error {
 	return s.storage.DeleteAuth(ctx)
 }
 
 // IsAuthenticated проверяет валидность сохраненных данных по сроку действия токена
-func (s *AuthService) IsAuthenticated(ctx context.Context) (bool, error) {
+func (s *authService) IsAuthenticated(ctx context.Context) (bool, error) {
 	return s.storage.IsAuthenticated(ctx)
 }
 
 // Logout выполняет выход из системы
 // Удаляет локальные данные авторизации и опционально уведомляет сервер
-func (s *AuthService) Logout(ctx context.Context) error {
+func (s *authService) Logout(ctx context.Context) error {
 	// 1. Пытаемся получить текущий access token для отправки серверу
 	// Используем расшифровку если ключ установлен
 	var accessToken string
@@ -309,7 +309,7 @@ func (s *AuthService) Logout(ctx context.Context) error {
 // RefreshToken обновляет access token используя refresh token
 // Автоматически загружает текущий refresh token, запрашивает новую пару токенов
 // и сохраняет их в хранилище
-func (s *AuthService) RefreshToken(ctx context.Context) error {
+func (s *authService) RefreshToken(ctx context.Context) error {
 	// Проверяем что ключ шифрования установлен
 	if s.encryptionKey == nil {
 		return fmt.Errorf("encryption key not set, call SetEncryptionKey first")
@@ -345,7 +345,7 @@ func (s *AuthService) RefreshToken(ctx context.Context) error {
 
 // getOrCreateNodeID возвращает существующий NodeID или создает новый
 // NodeID должен быть уникальным для каждого физического клиента/устройства
-func (s *AuthService) getOrCreateNodeID(ctx context.Context) (string, error) {
+func (s *authService) getOrCreateNodeID(ctx context.Context) (string, error) {
 	// Проверяем есть ли уже сохраненный NodeID в auth data
 	authData, err := s.storage.GetAuth(ctx)
 	if err != nil {
@@ -363,4 +363,29 @@ func (s *AuthService) getOrCreateNodeID(ctx context.Context) (string, error) {
 
 	// Если NodeID пустой (старая версия базы), создаем новый
 	return uuid.New().String(), nil
+}
+
+// EnsureTokenValid проверяет срок жизни access token и обновляет его при необходимости
+// Возвращает ошибку, если токен нельзя обновить или не аутентифицирован.
+func (s *authService) EnsureTokenValid(ctx context.Context) error {
+	if s.encryptionKey == nil {
+		return fmt.Errorf("encryption key not set")
+	}
+
+	authData, err := s.GetAuthDecryptData(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get auth data: %w", err)
+	}
+
+	expiresAt := time.Unix(authData.ExpiresAt, 0)
+	now := time.Now()
+	bufferTime := 60 * time.Second
+
+	if now.Add(bufferTime).After(expiresAt) {
+		// Токен скоро истекает или истек — обновляем
+		if err := s.RefreshToken(ctx); err != nil {
+			return fmt.Errorf("failed to refresh access token: %w", err)
+		}
+	}
+	return nil
 }

@@ -22,6 +22,9 @@ var _ Service = &ServiceMock{}
 //			DeleteAuthFunc: func(ctx context.Context) error {
 //				panic("mock out the DeleteAuth method")
 //			},
+//			EnsureTokenValidFunc: func(ctx context.Context) error {
+//				panic("mock out the EnsureTokenValid method")
+//			},
 //			GetAuthDecryptDataFunc: func(ctx context.Context) (*storage.AuthData, error) {
 //				panic("mock out the GetAuthDecryptData method")
 //			},
@@ -59,6 +62,9 @@ type ServiceMock struct {
 	// DeleteAuthFunc mocks the DeleteAuth method.
 	DeleteAuthFunc func(ctx context.Context) error
 
+	// EnsureTokenValidFunc mocks the EnsureTokenValid method.
+	EnsureTokenValidFunc func(ctx context.Context) error
+
 	// GetAuthDecryptDataFunc mocks the GetAuthDecryptData method.
 	GetAuthDecryptDataFunc func(ctx context.Context) (*storage.AuthData, error)
 
@@ -90,6 +96,11 @@ type ServiceMock struct {
 	calls struct {
 		// DeleteAuth holds details about calls to the DeleteAuth method.
 		DeleteAuth []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+		// EnsureTokenValid holds details about calls to the EnsureTokenValid method.
+		EnsureTokenValid []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
@@ -150,6 +161,7 @@ type ServiceMock struct {
 		}
 	}
 	lockDeleteAuth         sync.RWMutex
+	lockEnsureTokenValid   sync.RWMutex
 	lockGetAuthDecryptData sync.RWMutex
 	lockGetAuthEncryptData sync.RWMutex
 	lockIsAuthenticated    sync.RWMutex
@@ -190,6 +202,38 @@ func (mock *ServiceMock) DeleteAuthCalls() []struct {
 	mock.lockDeleteAuth.RLock()
 	calls = mock.calls.DeleteAuth
 	mock.lockDeleteAuth.RUnlock()
+	return calls
+}
+
+// EnsureTokenValid calls EnsureTokenValidFunc.
+func (mock *ServiceMock) EnsureTokenValid(ctx context.Context) error {
+	if mock.EnsureTokenValidFunc == nil {
+		panic("ServiceMock.EnsureTokenValidFunc: method is nil but Service.EnsureTokenValid was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockEnsureTokenValid.Lock()
+	mock.calls.EnsureTokenValid = append(mock.calls.EnsureTokenValid, callInfo)
+	mock.lockEnsureTokenValid.Unlock()
+	return mock.EnsureTokenValidFunc(ctx)
+}
+
+// EnsureTokenValidCalls gets all the calls that were made to EnsureTokenValid.
+// Check the length with:
+//
+//	len(mockedService.EnsureTokenValidCalls())
+func (mock *ServiceMock) EnsureTokenValidCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockEnsureTokenValid.RLock()
+	calls = mock.calls.EnsureTokenValid
+	mock.lockEnsureTokenValid.RUnlock()
 	return calls
 }
 

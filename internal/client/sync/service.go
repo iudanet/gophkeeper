@@ -5,36 +5,34 @@ import (
 	"fmt"
 	"log/slog"
 
+	httpClient "github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/models"
 	"github.com/iudanet/gophkeeper/pkg/api"
 )
 
-//go:generate moq -out apiclient_mock.go . APIClient
-//go:generate moq -out metadata_mock.go . MetadataStorage
+//go:generate moq -out service_mock.go . Service
 
-// APIClient defines interface for HTTP communication with server
-type APIClient interface {
-	Sync(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error)
-}
+// Service определяет интерфейс для sync.Service
+type Service interface {
+	// Sync выполняет полную синхронизацию с сервером
+	Sync(ctx context.Context, userID, accessToken string) (*SyncResult, error)
 
-// MetadataStorage defines interface for storing sync metadata
-type MetadataStorage interface {
-	SaveLastSyncTimestamp(ctx context.Context, timestamp int64) error
-	GetLastSyncTimestamp(ctx context.Context) (int64, error)
+	// GetPendingSyncCount возвращает количество записей, ожидающих синхронизации
+	GetPendingSyncCount(ctx context.Context) (int, error)
 }
 
 // Service handles synchronization between client and server
-type Service struct {
-	apiClient       APIClient
+type service struct {
+	apiClient       httpClient.ClientAPI
 	crdtStorage     storage.CRDTStorage
-	metadataStorage MetadataStorage
+	metadataStorage storage.MetadataStorage
 	logger          *slog.Logger
 }
 
 // NewService creates a new sync service
-func NewService(apiClient APIClient, crdtStorage storage.CRDTStorage, metadataStorage MetadataStorage, logger *slog.Logger) *Service {
-	return &Service{
+func NewService(apiClient httpClient.ClientAPI, crdtStorage storage.CRDTStorage, metadataStorage storage.MetadataStorage, logger *slog.Logger) Service {
+	return &service{
 		apiClient:       apiClient,
 		crdtStorage:     crdtStorage,
 		metadataStorage: metadataStorage,
@@ -55,7 +53,7 @@ type SyncResult struct {
 // 1. Pushes local changes to server
 // 2. Pulls server changes
 // 3. Merges server changes into local storage using CRDT rules
-func (s *Service) Sync(ctx context.Context, userID, accessToken string) (*SyncResult, error) {
+func (s *service) Sync(ctx context.Context, userID, accessToken string) (*SyncResult, error) {
 	s.logger.Info("Starting synchronization", "user_id", userID)
 
 	result := &SyncResult{}
@@ -163,7 +161,7 @@ func (s *Service) Sync(ctx context.Context, userID, accessToken string) (*SyncRe
 // mergeEntry применяет CRDT правила для слияния записи
 // Использует LWW-Element-Set с (timestamp, node_id) для разрешения конфликтов
 // Возвращает (updated bool, err error) где updated указывает была ли запись обновлена
-func (s *Service) mergeEntry(ctx context.Context, newEntry *models.CRDTEntry) (bool, error) {
+func (s *service) mergeEntry(ctx context.Context, newEntry *models.CRDTEntry) (bool, error) {
 	// Пытаемся получить существующую запись
 	existingEntry, err := s.crdtStorage.GetEntry(ctx, newEntry.ID)
 	if err != nil {
@@ -209,7 +207,7 @@ func (s *Service) mergeEntry(ctx context.Context, newEntry *models.CRDTEntry) (b
 
 // GetPendingSyncCount возвращает количество записей, ожидающих синхронизации
 // Использует lastSyncTimestamp из metadata storage для определения несинхронизированных записей
-func (s *Service) GetPendingSyncCount(ctx context.Context) (int, error) {
+func (s *service) GetPendingSyncCount(ctx context.Context) (int, error) {
 	// Получаем last sync timestamp
 	lastSyncTimestamp, err := s.metadataStorage.GetLastSyncTimestamp(ctx)
 	if err != nil {

@@ -11,15 +11,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/iudanet/gophkeeper/internal/client/api"
 	"github.com/iudanet/gophkeeper/internal/client/storage"
 	"github.com/iudanet/gophkeeper/internal/models"
-	"github.com/iudanet/gophkeeper/pkg/api"
+	apipkg "github.com/iudanet/gophkeeper/pkg/api"
 )
 
 func TestNewService(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{}, nil
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{}, nil
 		},
 	}
 
@@ -47,7 +48,7 @@ func TestNewService(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -62,17 +63,13 @@ func TestNewService(t *testing.T) {
 	service := NewService(mockAPI, mockStorage, mockMetadata, logger)
 
 	assert.NotNil(t, service)
-	assert.Equal(t, mockAPI, service.apiClient)
-	assert.Equal(t, mockStorage, service.crdtStorage)
-	assert.Equal(t, mockMetadata, service.metadataStorage)
-	assert.Equal(t, logger, service.logger)
 }
 
 func TestSync_EmptyLocal_EmptyServer(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{
-				Entries:          []api.CRDTEntry{},
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{
+				Entries:          []apipkg.CRDTEntry{},
 				CurrentTimestamp: 0,
 				Conflicts:        0,
 			}, nil
@@ -103,7 +100,7 @@ func TestSync_EmptyLocal_EmptyServer(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -133,10 +130,10 @@ func TestSync_EmptyLocal_EmptyServer(t *testing.T) {
 }
 
 func TestSync_PushLocalEntries(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{
-				Entries:          []api.CRDTEntry{},
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{
+				Entries:          []apipkg.CRDTEntry{},
 				CurrentTimestamp: 200,
 				Conflicts:        0,
 			}, nil
@@ -195,7 +192,7 @@ func TestSync_PushLocalEntries(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -249,7 +246,7 @@ func TestSync_PullServerEntries(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -262,10 +259,10 @@ func TestSync_PullServerEntries(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Мокаем API с серверными entries
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{
-				Entries: []api.CRDTEntry{
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{
+				Entries: []apipkg.CRDTEntry{
 					{
 						ID:        "server-entry-1",
 						UserID:    "user-123",
@@ -358,7 +355,7 @@ func TestSync_MergeWithConflict_NewerWins(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -371,10 +368,10 @@ func TestSync_MergeWithConflict_NewerWins(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Мокаем API с более новой серверной записью
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{
-				Entries: []api.CRDTEntry{
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{
+				Entries: []apipkg.CRDTEntry{
 					{
 						ID:        "entry-conflict",
 						UserID:    "user-123",
@@ -452,7 +449,7 @@ func TestSync_MergeWithConflict_OlderSkipped(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -465,10 +462,10 @@ func TestSync_MergeWithConflict_OlderSkipped(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Мокаем API с более старой серверной записью
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{
-				Entries: []api.CRDTEntry{
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{
+				Entries: []apipkg.CRDTEntry{
 					{
 						ID:        "entry-conflict",
 						UserID:    "user-123",
@@ -545,7 +542,7 @@ func TestSync_MergeWithSameTimestamp_NodeIDComparison(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -558,10 +555,10 @@ func TestSync_MergeWithSameTimestamp_NodeIDComparison(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Мокаем API с записью с тем же timestamp но большим NodeID
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{
-				Entries: []api.CRDTEntry{
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{
+				Entries: []apipkg.CRDTEntry{
 					{
 						ID:        "entry-same-ts",
 						UserID:    "user-123",
@@ -616,7 +613,7 @@ func TestSync_APIError(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -628,8 +625,8 @@ func TestSync_APIError(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
 			return nil, errors.New("network error")
 		},
 	}
@@ -645,9 +642,9 @@ func TestSync_APIError(t *testing.T) {
 }
 
 func TestSync_GetEntriesError(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{}, nil
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{}, nil
 		},
 	}
 
@@ -658,7 +655,7 @@ func TestSync_GetEntriesError(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -703,7 +700,7 @@ func TestSync_SaveEntryError(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -716,10 +713,10 @@ func TestSync_SaveEntryError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Мокаем API с серверными entries
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{
-				Entries: []api.CRDTEntry{
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{
+				Entries: []apipkg.CRDTEntry{
 					{
 						ID:        "server-entry",
 						UserID:    "user-123",
@@ -752,9 +749,9 @@ func TestSync_SaveEntryError(t *testing.T) {
 }
 
 func TestGetPendingSyncCount_NoEntries(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{}, nil
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{}, nil
 		},
 	}
 
@@ -772,7 +769,7 @@ func TestGetPendingSyncCount_NoEntries(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -793,9 +790,9 @@ func TestGetPendingSyncCount_NoEntries(t *testing.T) {
 }
 
 func TestGetPendingSyncCount_WithPendingEntries(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{}, nil
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{}, nil
 		},
 	}
 
@@ -847,7 +844,7 @@ func TestGetPendingSyncCount_WithPendingEntries(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64 = 100
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
@@ -868,9 +865,9 @@ func TestGetPendingSyncCount_WithPendingEntries(t *testing.T) {
 }
 
 func TestGetPendingSyncCount_NoLastSyncTimestamp(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{}, nil
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{}, nil
 		},
 	}
 
@@ -900,7 +897,7 @@ func TestGetPendingSyncCount_NoLastSyncTimestamp(t *testing.T) {
 		},
 	}
 
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return 0, errors.New("timestamp not found")
 		},
@@ -921,9 +918,9 @@ func TestGetPendingSyncCount_NoLastSyncTimestamp(t *testing.T) {
 }
 
 func TestGetPendingSyncCount_StorageError(t *testing.T) {
-	mockAPI := &APIClientMock{
-		SyncFunc: func(ctx context.Context, accessToken string, req api.SyncRequest) (*api.SyncResponse, error) {
-			return &api.SyncResponse{}, nil
+	mockAPI := &api.ClientAPIMock{
+		SyncFunc: func(ctx context.Context, accessToken string, req apipkg.SyncRequest) (*apipkg.SyncResponse, error) {
+			return &apipkg.SyncResponse{}, nil
 		},
 	}
 
@@ -934,7 +931,7 @@ func TestGetPendingSyncCount_StorageError(t *testing.T) {
 	}
 
 	var lastSyncTimestamp int64
-	mockMetadata := &MetadataStorageMock{
+	mockMetadata := &storage.MetadataStorageMock{
 		GetLastSyncTimestampFunc: func(ctx context.Context) (int64, error) {
 			return lastSyncTimestamp, nil
 		},
