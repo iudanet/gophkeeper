@@ -542,3 +542,20 @@ func TestSyncHandler_HandlePostSync_EmptyEntries(t *testing.T) {
 	assert.Equal(t, 0, response.Conflicts)
 	assert.Empty(t, mockStorage.SaveEntryCalls())
 }
+
+func TestGetUsername(t *testing.T) {
+	ctx := context.Background()
+
+	// Пустой контекст — должно вернуть false
+	username, ok := GetUsername(ctx)
+	assert.False(t, ok)
+	assert.Empty(t, username)
+
+	// Контекст с username
+	expectedUsername := "testuser"
+	ctxWithUsername := context.WithValue(ctx, UsernameKey, expectedUsername)
+
+	username, ok = GetUsername(ctxWithUsername)
+	assert.True(t, ok)
+	assert.Equal(t, expectedUsername, username)
+}

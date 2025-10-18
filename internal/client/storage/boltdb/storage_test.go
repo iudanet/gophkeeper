@@ -78,7 +78,10 @@ func TestInitBuckets_CreatesBuckets(t *testing.T) {
 	// Открываем БД вручную без создания бакетов
 	db, err := bbolt.Open(dbPath, 0600, nil)
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		err := db.Close()
+		assert.NoError(t, err)
+	}()
 
 	// Создаем Storage с установленным db но без вызова initBuckets
 	store := &Storage{db: db}

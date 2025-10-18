@@ -481,3 +481,25 @@ func BenchmarkLWWSet_Merge(b *testing.B) {
 		set1.Merge(set2)
 	}
 }
+
+func TestLWWSet_Update(t *testing.T) {
+	set := NewLWWSet()
+
+	entry := createTestEntry("id1", "user1", "node1", 10, false)
+
+	// Вызываем Update (что по сути вызывает Add)
+	added := set.Update(entry)
+	assert.True(t, added, "Первое добавление должно вернуть true")
+
+	// Добавляем более новую версию через Update
+	entryNew := createTestEntry("id1", "user1", "node1", 20, false)
+	entryNew.Data = []byte("updated data")
+	updated := set.Update(entryNew)
+	assert.True(t, updated, "Обновление с новым timestamp должно вернуть true")
+
+	// Добавляем старую версию через Update
+	entryOld := createTestEntry("id1", "user1", "node1", 5, false)
+	entryOld.Data = []byte("old data")
+	updated = set.Update(entryOld)
+	assert.False(t, updated, "Обновление со старым timestamp должно вернуть false")
+}
