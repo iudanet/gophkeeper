@@ -1,4 +1,4 @@
-package cli
+package iocli
 
 //go:generate moq -out io_mock.go . IO
 

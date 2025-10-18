@@ -11,6 +11,7 @@ import (
 	"github.com/iudanet/gophkeeper/internal/client/auth"
 	"github.com/iudanet/gophkeeper/internal/client/cli"
 	"github.com/iudanet/gophkeeper/internal/client/data"
+	"github.com/iudanet/gophkeeper/internal/client/iocli"
 	"github.com/iudanet/gophkeeper/internal/client/storage/boltdb"
 	"github.com/iudanet/gophkeeper/internal/client/sync"
 )
@@ -83,7 +84,7 @@ func main() {
 	syncService := sync.NewService(apiClient, boltStorage, boltStorage, logger)
 
 	// Создаем CLI с сервисами (без прямого доступа к storage)
-	stdio := cli.NewStdio()
+	stdio := iocli.NewStdio()
 	commands := cli.New(apiClient, authService, dataService, syncService, stdio, &pass)
 
 	command := args[0]
