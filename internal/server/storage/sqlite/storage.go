@@ -87,8 +87,3 @@ func (s *Storage) runMigrations() error {
 
 	return nil
 }
-
-// DB returns the underlying database connection for testing purposes
-func (s *Storage) DB() *sql.DB {
-	return s.db
-}
