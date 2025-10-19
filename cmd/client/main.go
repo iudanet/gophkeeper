@@ -88,7 +88,7 @@ func main() {
 	commands := cli.New(apiClient, authService, dataService, syncService, stdio, &pass)
 
 	command := args[0]
-	if command != "login" {
+	if command != "login" && command != "register" {
 		errPass := commands.ReadMasterPassword(ctx)
 		if errPass != nil {
 			fmt.Fprintf(os.Stderr, "Failed to read master password: %v\n", errPass)
