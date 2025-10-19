@@ -1,0 +1,279 @@
+package main
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/base64"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/iudanet/gophkeeper/internal/server/handlers"
+	"github.com/iudanet/gophkeeper/internal/server/middleware"
+	"github.com/iudanet/gophkeeper/internal/server/storage/sqlite"
+)
+
+var (
+	// Version information set via ldflags during build
+	Version   = "dev"
+	BuildDate = "unknown"
+	GitCommit = "unknown"
+)
+
+func main() {
+	// Parse flags
+	showVersion := flag.Bool("version", false, "Show version information")
+	port := flag.Int("port", 8080, "Server port")
+	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	dbPath := flag.String("db", "gophkeeper.db", "Path to SQLite database file")
+	jwtSecret := flag.String("jwt-secret", "", "JWT secret (auto-generated if empty)")
+
+	// TLS flags
+	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
+	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
+	insecure := flag.Bool("insecure", false, "Run server without TLS (development only)")
+
+	flag.Parse()
+
+	// Show version and exit if requested
+	if *showVersion {
+		printVersion()
+		os.Exit(0)
+	}
+
+	// Инициализация logger
+	logger := initLogger(*logLevel)
+	logger.Info("Starting GophKeeper Server",
+		slog.String("version", Version),
+		slog.String("build_date", BuildDate),
+		slog.String("git_commit", GitCommit),
+		slog.Int("port", *port),
+		slog.String("db_path", *dbPath),
+	)
+
+	// Генерируем JWT secret если не указан
+	secret := *jwtSecret
+	if secret == "" {
+		logger.Warn("JWT secret not provided, generating random secret")
+		secret = generateRandomSecret()
+		logger.Info("Generated JWT secret (save this for production)", slog.String("secret", secret))
+	}
+
+	// Инициализация storage
+	ctx := context.Background()
+	// TODO возвращать интерфейс
+	storage, err := sqlite.New(ctx, *dbPath)
+	if err != nil {
+		logger.Error("Failed to initialize storage", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			logger.Error("Failed to close storage", slog.Any("error", err))
+		}
+	}()
+	logger.Info("Storage initialized successfully")
+
+	// Создание JWT конфигурации
+	// Access token: 15 минут, Refresh token: 30 дней
+	jwtConfig := handlers.JWTConfig{
+		Secret:          []byte(secret),
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+	logger.Info("JWT configuration initialized")
+
+	// Создание handlers
+	authHandler := handlers.NewAuthHandler(logger, storage, storage, jwtConfig)
+	healthHandler := handlers.NewHealthHandler(logger)
+	syncHandler := handlers.NewSyncHandler(logger, storage)
+
+	// Настройка роутинга с использованием net/http.ServeMux (Go 1.22+)
+	mux := http.NewServeMux()
+
+	// Создаем rate limiters для критичных endpoints
+	// Для login, register, getSalt - более строгие лимиты (защита от brute-force)
+	authRateLimit := middleware.RateLimitMiddleware(10, 1*time.Minute, logger) // 10 запросов в минуту
+
+	// Auth endpoints (с rate limiting для защиты от brute-force)
+	mux.Handle("POST /api/v1/auth/register", authRateLimit(http.HandlerFunc(authHandler.Register)))
+	mux.Handle("GET /api/v1/auth/salt/{username}", authRateLimit(http.HandlerFunc(authHandler.GetSalt)))
+	mux.Handle("POST /api/v1/auth/login", authRateLimit(http.HandlerFunc(authHandler.Login)))
+	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
+	mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
+
+	// Health check (без rate limiting)
+	mux.HandleFunc("GET /api/v1/health", healthHandler.Health)
+
+	// Sync endpoints (защищены AuthMiddleware, без rate limiting для синхронизации)
+	authMiddleware := middleware.AuthMiddleware(logger, jwtConfig)
+	mux.Handle("GET /api/v1/sync", authMiddleware(http.HandlerFunc(syncHandler.HandleSync)))
+	mux.Handle("POST /api/v1/sync", authMiddleware(http.HandlerFunc(syncHandler.HandleSync)))
+
+	// Применяем глобальные middleware (порядок важен!)
+	// 1. Recovery - перехватывает паники (самый верхний уровень)
+	// 2. Logging - логирует все запросы
+	var handler http.Handler = mux
+	handler = middleware.LoggingMiddleware(logger)(handler)
+	handler = middleware.RecoveryMiddleware(logger)(handler)
+
+	logger.Info("Middleware configured",
+		slog.String("recovery", "enabled"),
+		slog.String("logging", "enabled"),
+		slog.String("rate_limit_auth", "10 req/min"),
+	)
+
+	// Проверка TLS конфигурации
+	useTLS := !*insecure
+	if useTLS {
+		if *tlsCert == "" || *tlsKey == "" {
+			logger.Error("TLS certificate and key are required when not using --insecure flag")
+			logger.Info("Use --insecure flag for development without TLS, or provide --tls-cert and --tls-key")
+			os.Exit(1)
+		}
+
+		// Проверяем существование файлов
+		if _, err := os.Stat(*tlsCert); os.IsNotExist(err) {
+			logger.Error("TLS certificate file not found", slog.String("path", *tlsCert))
+			os.Exit(1)
+		}
+		if _, err := os.Stat(*tlsKey); os.IsNotExist(err) {
+			logger.Error("TLS key file not found", slog.String("path", *tlsKey))
+			os.Exit(1)
+		}
+
+		logger.Info("TLS enabled",
+			slog.String("cert", *tlsCert),
+			slog.String("key", *tlsKey),
+		)
+	} else {
+		logger.Warn("Running in INSECURE mode without TLS - suitable for development only!")
+	}
+
+	// Создание HTTP сервера
+	addr := fmt.Sprintf(":%d", *port)
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Настройка TLS если включен
+	if useTLS {
+		// Загружаем сертификат и ключ
+		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		if err != nil {
+			logger.Error("Failed to load TLS certificate", slog.Any("error", err))
+			os.Exit(1)
+		}
+
+		server.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			},
+		}
+	}
+
+	// Запуск сервера в отдельной горутине
+	serverErrors := make(chan error, 1)
+	go func() {
+		protocol := "http"
+		if useTLS {
+			protocol = "https"
+		}
+		logger.Info("Server listening",
+			slog.String("address", addr),
+			slog.String("protocol", protocol),
+		)
+
+		if useTLS {
+			// Для TLS используем пустые строки, так как сертификат уже загружен в TLSConfig
+			serverErrors <- server.ListenAndServeTLS("", "")
+		} else {
+			serverErrors <- server.ListenAndServe()
+		}
+	}()
+
+	// Graceful shutdown
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErrors:
+		logger.Error("Server failed to start", slog.Any("error", err))
+		os.Exit(1)
+	case sig := <-shutdown:
+		logger.Info("Server shutdown initiated", slog.String("signal", sig.String()))
+
+		// Создаем контекст с таймаутом для graceful shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := server.Shutdown(ctx); err != nil {
+			logger.Error("Server shutdown failed", slog.Any("error", err))
+			if err := server.Close(); err != nil {
+				logger.Error("Server close failed", slog.Any("error", err))
+			}
+			os.Exit(1)
+		}
+
+		logger.Info("Server stopped gracefully")
+	}
+}
+
+// initLogger инициализирует структурированный logger
+func initLogger(level string) *slog.Logger {
+	var logLevel slog.Level
+	switch level {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "info":
+		logLevel = slog.LevelInfo
+	case "warn":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelInfo
+	}
+
+	opts := &slog.HandlerOptions{
+		Level: logLevel,
+	}
+
+	// Используем JSON handler для production
+	handler := slog.NewJSONHandler(os.Stdout, opts)
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+
+	return logger
+}
+
+func printVersion() {
+	fmt.Printf("GophKeeper Server\n")
+	fmt.Printf("Version:    %s\n", Version)
+	fmt.Printf("Build Date: %s\n", BuildDate)
+	fmt.Printf("Git Commit: %s\n", GitCommit)
+}
+
+// generateRandomSecret генерирует случайный секрет для JWT
+func generateRandomSecret() string {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		panic(fmt.Sprintf("failed to generate random secret: %v", err))
+	}
+	return base64.StdEncoding.EncodeToString(bytes)
+}
