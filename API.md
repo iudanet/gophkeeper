@@ -12,11 +12,11 @@ http://localhost:8080
 
 **Description:** Регистрация нового пользователя
 
-**Request:**
+**Request Body:**
 ```json
 {
   "username": "alice",
-  "auth_key_hash": "bcrypt_hash_of_auth_key",
+  "auth_key_hash": "sha256_hash_of_auth_key",
   "public_salt": "base64_encoded_32_bytes_salt"
 }
 ```
@@ -30,8 +30,8 @@ http://localhost:8080
 ```
 
 **Errors:**
-- `400 Bad Request` - Invalid username or missing fields
-- `409 Conflict` - Username already exists (TODO: not implemented yet)
+- `400 Bad Request` - Invalid username format or missing fields
+- `409 Conflict` - Username already exists
 
 ---
 
@@ -48,8 +48,8 @@ http://localhost:8080
 ```
 
 **Errors:**
-- `400 Bad Request` - Invalid username format
-- `404 Not Found` - User not found (TODO: not implemented yet)
+- `400 Bad Request` - Invalid username format or missing username
+- `404 Not Found` - User not found
 
 ---
 
@@ -58,17 +58,18 @@ http://localhost:8080
 
 **Description:** Аутентификация пользователя
 
-**Request:**
+**Request Body:**
 ```json
 {
   "username": "alice",
-  "auth_key_hash": "bcrypt_hash_of_auth_key"
+  "auth_key_hash": "sha256_hash_of_auth_key"
 }
 ```
 
 **Response:** `200 OK`
 ```json
 {
+  "user_id": "uuid",
   "access_token": "jwt_token",
   "refresh_token": "random_token",
   "expires_in": 900
@@ -76,8 +77,8 @@ http://localhost:8080
 ```
 
 **Errors:**
-- `400 Bad Request` - Invalid username or missing fields
-- `401 Unauthorized` - Invalid credentials (TODO: not implemented yet)
+- `400 Bad Request` - Invalid username format or missing fields
+- `401 Unauthorized` - Invalid credentials
 
 ---
 
@@ -94,6 +95,7 @@ Authorization: Bearer <refresh_token>
 **Response:** `200 OK`
 ```json
 {
+  "user_id": "uuid",
   "access_token": "new_jwt_token",
   "refresh_token": "new_random_token",
   "expires_in": 900
@@ -102,13 +104,14 @@ Authorization: Bearer <refresh_token>
 
 **Errors:**
 - `401 Unauthorized` - Invalid or expired refresh token
+- `400 Bad Request` - Missing or malformed Authorization header
 
 ---
 
 ### 5. Logout
 **Endpoint:** `POST /api/v1/auth/logout`
 
-**Description:** Выход пользователя (удаление refresh token)
+**Description:** Выход пользователя (удаление refresh токенов пользователя)
 
 **Headers:**
 ```
@@ -118,7 +121,7 @@ Authorization: Bearer <access_token>
 **Response:** `204 No Content`
 
 **Errors:**
-- `401 Unauthorized` - Invalid access token
+- `401 Unauthorized` - Invalid or missing access token
 
 ---
 
@@ -134,6 +137,37 @@ Authorization: Bearer <access_token>
 {
   "status": "ok",
   "version": "dev"
+}
+```
+
+---
+
+## Common Error Response Format
+
+All errors return JSON in the following format:
+
+```json
+{
+  "error": "HTTP Status Text",
+  "message": "Detailed error message"
+}
+```
+
+**Examples:**
+
+- Bad Request
+```json
+{
+  "error": "Bad Request",
+  "message": "username can only contain letters (a-z, A-Z), numbers (0-9), and underscores (_)"
+}
+```
+
+- Unauthorized
+```json
+{
+  "error": "Unauthorized",
+  "message": "Authorization header is required"
 }
 ```
 
@@ -182,81 +216,4 @@ curl -X POST http://localhost:8080/api/v1/auth/logout \
 ### Health check
 ```bash
 curl http://localhost:8080/api/v1/health
-```
-
----
-
-## Server Configuration
-
-### Command-line flags
-```bash
-./gophkeeper-server [OPTIONS]
-
-Options:
-  --version           Show version information
-  --port PORT         Server port (default: 8080)
-  --log-level LEVEL   Log level: debug, info, warn, error (default: info)
-```
-
-### Examples
-```bash
-# Start server on default port 8080
-./gophkeeper-server
-
-# Start server on custom port
-./gophkeeper-server --port 9000
-
-# Start server with debug logging
-./gophkeeper-server --log-level debug
-
-# Show version
-./gophkeeper-server --version
-```
-
----
-
-## Current Implementation Status
-
-✅ **Implemented:**
-- All HTTP endpoints with stub responses
-- Request validation (username, required fields)
-- JSON request/response handling
-- Structured logging (slog)
-- Graceful shutdown
-- Health check endpoint
-
-⏳ **TODO (Stubs):**
-- Database integration (SQLite)
-- JWT token generation and validation
-- bcrypt password verification
-- Refresh token management
-- Rate limiting
-- Authentication middleware
-
----
-
-## Error Response Format
-
-All errors return JSON in the following format:
-
-```json
-{
-  "error": "HTTP Status Text",
-  "message": "Detailed error message"
-}
-```
-
-Examples:
-```json
-{
-  "error": "Bad Request",
-  "message": "username can only contain letters (a-z, A-Z), numbers (0-9), and underscores (_)"
-}
-```
-
-```json
-{
-  "error": "Unauthorized",
-  "message": "Authorization header is required"
-}
 ```
