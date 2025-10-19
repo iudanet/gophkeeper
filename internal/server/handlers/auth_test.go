@@ -537,9 +537,10 @@ func TestAuthHandler_Refresh_Success(t *testing.T) {
 	}
 
 	oldRefreshToken := "old-refresh-token"
+	hashedOldToken := hashToken(oldRefreshToken)
 	tokensMap := make(map[string]*models.RefreshToken)
-	tokensMap[oldRefreshToken] = &models.RefreshToken{
-		Token:     oldRefreshToken,
+	tokensMap[hashedOldToken] = &models.RefreshToken{
+		Token:     hashedOldToken,
 		UserID:    "user123",
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		CreatedAt: time.Now(),
@@ -588,7 +589,7 @@ func TestAuthHandler_Refresh_Success(t *testing.T) {
 
 	// Verify old token was deleted
 	assert.Len(t, tokenStorage.DeleteRefreshTokenCalls(), 1)
-	assert.Equal(t, oldRefreshToken, tokenStorage.DeleteRefreshTokenCalls()[0].Token)
+	assert.Equal(t, hashedOldToken, tokenStorage.DeleteRefreshTokenCalls()[0].Token)
 
 	// Verify new token was saved
 	assert.Len(t, tokenStorage.SaveRefreshTokenCalls(), 1)
@@ -616,11 +617,12 @@ func TestAuthHandler_Refresh_ExpiredToken(t *testing.T) {
 	userStorage := &storage.UserStorageMock{}
 
 	expiredToken := "expired-token"
+	hashedExpiredToken := hashToken(expiredToken)
 	tokenStorage := &storage.TokenStorageMock{
 		GetRefreshTokenFunc: func(ctx context.Context, token string) (*models.RefreshToken, error) {
 			if token == expiredToken {
 				return &models.RefreshToken{
-					Token:     expiredToken,
+					Token:     hashedExpiredToken,
 					UserID:    "user123",
 					ExpiresAt: time.Now().Add(-1 * time.Hour), // Expired
 					CreatedAt: time.Now().Add(-25 * time.Hour),
@@ -892,11 +894,12 @@ func TestAuthHandler_Refresh_SaveRefreshTokenError(t *testing.T) {
 	}
 
 	validToken := "valid_token"
+	hashedValidToken := hashToken(validToken)
 	tokenStorage := &storage.TokenStorageMock{
 		GetRefreshTokenFunc: func(ctx context.Context, token string) (*models.RefreshToken, error) {
-			if token == validToken {
+			if token == hashedValidToken {
 				return &models.RefreshToken{
-					Token:     validToken,
+					Token:     hashedValidToken,
 					UserID:    "user1",
 					ExpiresAt: time.Now().Add(1 * time.Hour),
 					CreatedAt: time.Now(),
@@ -952,11 +955,12 @@ func TestAuthHandler_Refresh_GetUserByIDError(t *testing.T) {
 	}
 
 	validToken := "valid_token"
+	hashedValidToken := hashToken(validToken)
 	tokenStorage := &storage.TokenStorageMock{
 		GetRefreshTokenFunc: func(ctx context.Context, token string) (*models.RefreshToken, error) {
-			if token == validToken {
+			if token == hashedValidToken {
 				return &models.RefreshToken{
-					Token:     validToken,
+					Token:     hashedValidToken,
 					UserID:    "user123",
 					ExpiresAt: time.Now().Add(1 * time.Hour),
 					CreatedAt: time.Now(),
@@ -995,11 +999,12 @@ func TestAuthHandler_Refresh_DeleteOldTokenError(t *testing.T) {
 	}
 
 	validToken := "valid_token"
+	hashedValidToken := hashToken(validToken)
 	tokenStorage := &storage.TokenStorageMock{
 		GetRefreshTokenFunc: func(ctx context.Context, token string) (*models.RefreshToken, error) {
-			if token == validToken {
+			if token == hashedValidToken {
 				return &models.RefreshToken{
-					Token:     validToken,
+					Token:     hashedValidToken,
 					UserID:    "user1",
 					ExpiresAt: time.Now().Add(1 * time.Hour),
 					CreatedAt: time.Now(),

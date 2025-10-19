@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -203,10 +205,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-
+	hashedRefreshToken := hashToken(refreshToken)
 	// Сохраняем refresh token в БД
 	token := &models.RefreshToken{
-		Token:     refreshToken,
+		Token:     hashedRefreshToken,
 		UserID:    user.ID,
 		ExpiresAt: expiresAt,
 		CreatedAt: time.Now(),
@@ -265,7 +267,8 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Проверяем refresh token в БД
-	storedToken, err := h.tokenStorage.GetRefreshToken(ctx, refreshToken)
+	hashedRefreshToken := hashToken(refreshToken)
+	storedToken, err := h.tokenStorage.GetRefreshToken(ctx, hashedRefreshToken)
 	if err != nil {
 		if errors.Is(err, storage.ErrTokenNotFound) {
 			h.logger.WarnContext(ctx, "refresh token not found")
@@ -309,14 +312,16 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Удаляем старый refresh token
-	if err := h.tokenStorage.DeleteRefreshToken(ctx, refreshToken); err != nil {
+	if err := h.tokenStorage.DeleteRefreshToken(ctx, hashedRefreshToken); err != nil {
 		h.logger.WarnContext(ctx, "failed to delete old refresh token", slog.Any("error", err))
 		// Продолжаем выполнение
 	}
 
 	// Сохраняем новый refresh token
+	newHashedRefreshToken := hashToken(newRefreshToken)
+
 	newToken := &models.RefreshToken{
-		Token:     newRefreshToken,
+		Token:     newHashedRefreshToken,
 		UserID:    user.ID,
 		ExpiresAt: newExpiresAt,
 		CreatedAt: time.Now(),
@@ -405,4 +410,10 @@ func (h *AuthHandler) sendError(w http.ResponseWriter, message string, statusCod
 		Message: message,
 	}
 	h.sendJSON(w, resp, statusCode)
+}
+
+func hashToken(token string) string {
+	hash := sha256.New()
+	hash.Write([]byte(token))
+	return hex.EncodeToString(hash.Sum(nil))
 }
